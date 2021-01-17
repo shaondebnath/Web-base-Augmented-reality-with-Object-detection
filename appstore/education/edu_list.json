@@ -1,0 +1,15 @@
+[
+	{
+		"id": "1",
+		"name": "Skull",
+		"iconpath":"skull/images/",
+		"htmlpath": "skull/"
+	},
+	{
+		"id": "2",
+		"name": "Human",
+		"iconpath":"human/images/",
+		"htmlpath": "human/"
+	}
+		
+]

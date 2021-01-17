@@ -1,0 +1,1213 @@
+<html>
+	<head>
+		<title>TV Detection & Coontrol</title>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+		<style>
+			body, html {
+				padding: 0;
+				margin: 0;
+				width: 100%;
+				height: 100%;
+				overflow: hidden;
+				-webkit-overflow-scrolling: touch;			
+				-webkit-user-select: none;
+				user-select: none;
+			}
+			#target {
+				width: 100%;
+				height: 100%;
+				position: absolute;
+			}
+			#video_canvas {
+				transform: translate(-50%, 0);
+				opacity:0.5;
+				position:absolute;
+				top: 0;
+				left: 0;
+				border:1px solid green
+			}
+			.text-box {
+				position: absolute;
+				top: 5%;
+				left: 50%;
+				color: white;
+				background: rgba(27,55,55,0.75);;
+				outline: 1px solid rgba(127,255,255,0.75);
+				border: 0px;
+				padding: 5px 10px;
+				transform: translate(-50%, 0%);
+				font-size: 0.8em;
+			}
+			.common-message {
+				position: absolute;
+				top: 50%;
+				left: 50%;
+				transform: translate(-50%, -50%);
+				font-size: 10px;
+			}
+			img.crosshair {
+				position: absolute;
+				top: 50%;
+				left: 50%;
+				margin-left: -32px;
+				margin-top: -32px;
+			}
+
+			/* horizontal scroll bootstrap*/
+			.testimonial-group > .row {
+				overflow-x: auto;
+				white-space: nowrap;
+			}
+			.testimonial-group > .row > .col-xs-4 {
+				display: inline-block;
+				float: none;
+			}
+
+			/*modal for TV popup */
+			.modal {
+				display: none; /* Hidden by default */
+				position: fixed; /* Stay in place */
+				z-index: 1; /* Sit on top */
+				padding-top: 100px; /* Location of the box */
+				left: 0;
+				top: 0;
+				width: 100%; /* Full width */
+				height: 100%; /* Full height */
+				overflow: auto; /* Enable scroll if needed */
+				background-color: rgb(0,0,0); /* Fallback color */
+				background-color: rgba(0,0,0,0.4); /* Black w/ opacity */
+			}
+
+			/* Modal Content */
+			.modal-content {
+				background-color: #fefefe;
+				margin: auto;
+				padding: 20px;
+				border: 1px solid #888;
+				width: 80%;
+
+			}
+
+			/* The Close Button */
+			.close {
+				color: #aaaaaa;
+				float: right;
+				font-size: 28px;
+				font-weight: bold;
+			}
+			.button {
+				background-color: #008CBA;
+				border-radius: 8px;
+				box-shadow: 0 8px 16px 0 rgba(0,0,0,0.2), 0 6px 20px 0 rgba(0,0,0,0.19);
+				width: 100px;
+				height: 50px;
+			}
+
+
+		</style>
+		<link rel="stylesheet" href="../../common/common.css"/>
+		<!--<link rel="stylesheet" href="common/scrollview.css"/>-->
+
+		<script src="../../libs/three.js"></script>
+		<script src="../../libs/stats.js"></script>
+		<!--<script type="module" src="polyfill/XRPolyfill.js"></script>
+		<script nomodule src="dist/webxr-polyfill.js"></script>-->
+		<script src="../../dist/webxr-polyfill.js"></script>
+		<script src="../../common/common.js"></script>
+		<script src="../../libs/three-gltf-loader.js"></script>
+		<script src="../../libs/dat.gui.min.js"></script>
+
+		<!--<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.1.3/css/bootstrap.min.css">
+		<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css">
+		<link rel="stylesheet" href="common/bootstrap337.min.css"/>-->
+		<script src="../../common/ajax/jquery.min.js"></script> <!--https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js-->
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.3/umd/popper.min.js"></script>
+		<script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.1.3/js/bootstrap.min.js"></script>
+		<!--<script src="https://cdn.jsdelivr.net/npm/vue@2.5.17/dist/vue.js"></script>-->
+		<script src="../../common/ajax/require.min.js"></script><!--"https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js"-->
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js.map"></script><!--"https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js.map"-->
+
+		<script src="../../libs/threejs/utils/GeometryUtils.js"></script>
+		<script src="../../libs/threejs/WebGL.js"></script>
+
+		<script src="./class/RemoteGrid.js"></script>
+
+	</head>
+	<body>
+		<!-- place to render detected face rectanges over the video frame -->
+		<canvas id="video_canvas" width="100%" height="100%"> </canvas>
+
+		<div id="target" />
+<!--		<div onclick="hideMe(this)" id="description">
+			<h2>OpenCV Face Detection Demo</h2>
+			<h5>(click to dismiss)</h5>
+			<p>Use OpenCV to find faces and draw boxes around them in 2D.</p>
+		</div>
+-->
+		<div id="errormsg" style="text-align:center; color:#ffae6e; font-size: 40px"></div>
+		<!-- Modal content -->
+		<div id="tvConnectModal" class="modal">
+			<div class="modal-content">
+				<span class="close">&times;</span>
+				<h3><p align="center">TV Found</p></h3>
+				<p align="center">Connect with it and open Remote</p>
+				<p align="center"><input id="connectBtn" type="button" class = "button" value="Connect" onclick="redirectTVPage();" /></p>
+			</div>
+		</div>
+		<div class="modal" id="mousePadModal">
+			<div class="modal-content">
+				<p align="right"><button id="closePadBtn">X</button></p>
+
+				<div class="modal-body">
+				</div>
+			</div>
+		</div>
+		<div class="modal" id="tvRemoteModal">
+			<div class="modal-content">
+				<p align="right"><button id="closeRemoteBtn">X</button></p>
+
+				<div class="modal-body">
+				</div>
+			</div>
+		</div>
+
+		<div id="buttonDiv" style="display: none">
+			<button id="tvConnectModalBtn">TV Remote Page</button>
+			<!--<button type="button" class="btn btn-primary" href="tvremote_modal.html" data-toggle="modal" data-target="#tvRemoteModal" id="tvRemoteBtn" >TV Remote</button>
+			<button id="mousePadBtn">MousePad</button>-- >
+			<button type="button" class="btn btn-primary" href="http://192.168.1.146:3003" data-toggle="modal" data-target="#mousePadModal" id="mousePadBtn" >Mouse Pad</button>-->
+		</div>
+
+		<script>
+			var cvStatusTxt = "";
+			// set up for collecting different stats
+			var beginTime = ( performance || Date ).now(), prevTime = beginTime, frames = 0;	
+			
+			// set up some stats, including a new pane for CV fps
+			var stats = new Stats();
+			stats.domElement.style.cssText = 'position:fixed;top:2%;right:2%;cursor:pointer;opacity:0.9;z-index:10000';
+			var cvPanel = stats.addPanel( new Stats.Panel( 'CV fps', '#ff8', '#221' ) );
+			stats.showPanel( 2 ); // 0: fps, 1: ms, 2: mb, 3+: custom
+			// a method to update a new panel for displaying CV FPS
+			var updateCVFPS = function () {
+				frames ++;
+				var time = ( performance || Date ).now();
+				if ( time >= prevTime + 1000 ) {
+					cvPanel.update( ( frames * 1000 ) / ( time - prevTime ), 100 );
+					prevTime = time;
+					frames = 0;
+				}
+				beginTime = time;
+			}
+			document.body.appendChild( stats.dom );
+
+			// keep track of what we think the view size is so we can adjust the 
+			// overlay used to render the 2D detection results
+			var viewWidth = 0;
+			var viewHeight = 0;
+
+			// various variables to hold values for statistics collected from the worker 
+			var cvStartTime = 0;
+			var cvAfterMatTime = 0;
+			var cvAfterResizeTime = 0;
+			var cvEndTime = 0;
+
+			var cvMatTime = 0;
+			var cvFaceTime = 0
+			var cvResizeTime = 0;
+			var cvIdleTime = 0;
+			
+			// has openCV loaded?
+			var openCVready = false;
+			
+			// for debugging, show the image we did the CV on 
+			var showCVImage = false;
+			var cvImageBuff = null
+			var tempVideoCanvas = document.createElement('canvas');
+			var tempVideoCanvasCtx = tempVideoCanvas.getContext('2d');
+
+			// a 2D buffer to show the 2D boxes in, and the video in
+			var cvImageDiv = document.getElementById("video_canvas");
+			var cvImageCtx = cvImageDiv.getContext('2d');
+
+            var isTVFound = false;
+            //modal
+            var tvConnectModal = document.getElementById('tvConnectModal');
+            var mousePadModal = document.getElementById('mousePadModal');
+            var tvRemoteModal = document.getElementById('tvRemoteModal');
+            var span = document.getElementsByClassName("close")[0];
+            //modal end
+
+            var remoteURLPort = 'http://192.168.0.100:3003/'; // For Remote
+            //var remoteURLPort = 'http://192.168.1.11:3000'; // for TV
+
+			var enableTV=false;   // make it true to work with television
+
+			//onClick(1000,122);
+
+			var mousePadWidth=0;
+			var mousePadHeight=0;
+            var mousePadOffsetX=0;
+            var mousePadOffsetY=0;
+
+            var isBoxCreated = false;
+			var isRemoteCreated =false;
+            var is3DRemoteCreated =false;
+            var tvfoundPos = new Array();
+            var isTextCreated=true;
+            var noOfFrameNoTV =0;
+			this.sdGroup = new THREE.Group();
+			// for font
+            //const _threeGeometries={}; // for 3D Text
+            var cubeMat = new THREE.MeshLambertMaterial({color: 0xff33ff})
+            // for font
+            var noOfRemoteColumn = 2;
+            var noOfRemoteRow = 5;
+            var grid = new Array(noOfRemoteRow);//3*4
+            for (var i = 0; i <noOfRemoteRow; i++)
+                grid[i] = new Array(noOfRemoteColumn);
+
+			//remote
+            const remoteHolder = new THREE.Mesh(
+                new THREE.BoxBufferGeometry(0.1, 0.05, 0.1),//new THREE.BoxBufferGeometry(10, 0.1, 10),
+                new THREE.MeshPhongMaterial({color: '#DDFFDD'})
+            )
+
+			class WebXRObjectDetection extends XRExampleBase {
+				constructor(domElement){
+					super(domElement, false, true, true)
+
+					this.textBox = document.createElement('span')
+					this.textBox.setAttribute('class', 'text-box')
+					this.textBox.innerText = '0.0'
+					this.faceRects = [];
+					this.eyeRects = [];
+                    this.sdObjectRects =[];
+					this.lightEstimate = 0;
+					this.el.appendChild(this.textBox)
+
+                    this.msgScore = document.createElement('div')
+                    this.msgScore.style.position = 'absolute'
+                    this.msgScore.style.bottom = '10px'
+                    this.msgScore.style.left = '0px';//(window.innerWidth/3).toString()+'px';//''10px
+                    this.msgScore.style.color = 'white'
+                    this.msgScore.style['font-size'] = '25px'
+                    this.msgScore.innerHTML = '';
+                    this.el.appendChild(this.msgScore)
+
+                    this.el.addEventListener('touchstart', this._onTouchStart.bind(this), false)
+                  //  this.el.addEventListener('click',this._onMouseDown.bind(this), false);
+
+					// some temp variables
+					this.rotation = -1;
+					this.triggerResize = true;
+
+
+					// try to notice all resizes of the screen
+					window.addEventListener('resize', () => {
+						console.log("resize, trigger adjust canvas size")
+						this.triggerResize = true;
+					})
+
+					// new worker
+					this.worker = new Worker ("../../libs/worker-tv.js")
+                   // this.worker.postMessage({xmlName:"haarcascade_frontalface_default.xml"});
+
+
+					this.worker.onmessage = (ev) => {
+						switch (ev.data.type) {
+							case "cvFrame":
+								// finished with a frame!
+								var videoFrame = XRVideoFrame.createFromMessage(ev)
+
+								// get the face rectangles
+								//-this.faceRects = ev.data.faceRects;
+                                this.sdObjectRects = ev.data.sdObjectRects;
+
+								// timing
+								cvEndTime = ev.data.time;
+								cvFaceTime = cvEndTime - cvAfterResizeTime;
+
+								// see if the video frame sizes have changed, since
+								// we'll need to adjust the 2D overlay
+								var rotation = videoFrame.camera.cameraOrientation;
+								var buffer = videoFrame.buffer(0)
+
+								//var width = window.innerWidth;//buffer.size.width
+								//var height = window.innerHeight;//buffer.size.height
+                                var width = buffer.size.width
+                                var height = buffer.size.height
+								if (this.triggerResize || this.rotation != rotation) {
+									this.triggerResize = false;
+									this.rotation = rotation;
+									this.adjustRenderCanvasSize(rotation, width, height)
+								}
+
+								// are we showing the image (for debugging) or just the rectangles?
+								if (showCVImage) {
+									this.showVideoFrame(videoFrame)
+								} else {
+                                   /* mousePadWidth = 0;
+                                    mousePadHeight = 0;
+                                    mousePadOffsetX = 0;
+                                    mousePadOffsetY = 0;*/
+									//cvImageCtx.clearRect(0, 0, cvImageDiv.width, cvImageDiv.height);
+								}
+
+
+
+                                for (let i = 0; i < this.sdObjectRects.length; i++) {
+                                    let rect = this.sdObjectRects[i];
+                                    if(!isBoxCreated) {
+                                        mousePadWidth = cvImageDiv.width - 40;//rect.width;
+                                        mousePadHeight = cvImageDiv.height - 40;//rect.height;
+                                        mousePadOffsetX = 20;//rect.x;
+                                        mousePadOffsetY = 20;//rect.y;
+                                      //  cvImageCtx.strokeRect(rect.x, rect.y, rect.width , rect.height);
+										if (!enableTV) { //for pc
+                                            cvImageCtx.strokeRect(mousePadOffsetX, mousePadOffsetY, mousePadWidth, mousePadHeight);
+                                        }
+                                        //this.msgScore.innerHTML = "TV found, adjust TV in this box and act as touch"
+										if (enableTV) {
+                                            document.getElementById("buttonDiv").style.display = "block";
+                                        }
+                                        isBoxCreated=true
+                                    }
+                                    //cvImageCtx.strokeRect(rect.x, rect.y, rect.width , rect.height);
+                                    if (!isTextCreated){
+                                        var x = (rect.x+ rect.width)/cvImageDiv.width;
+                                        var y = rect.height/cvImageDiv.height;
+										this.create3dObject(x,y,"text");
+										//isRemoteCreated= true;
+                                    }
+
+                                }
+
+								// update CV fps, and release the image
+								updateCVFPS();
+								videoFrame.release();
+								break;
+
+							case "cvStart":
+								// request the next frame when the worker starts working on the current
+								// one, to pipeline a bit
+								this.requestVideoFrame();
+
+								// has there been a delay since the last frame was finished processing?
+								// this shouldn't happen, but is a sign that the background tasks are
+								// being throttled
+								cvStartTime = ev.data.time;
+								if (cvEndTime > 0) {
+									cvIdleTime = cvStartTime - cvEndTime;
+								}
+								break
+								
+							case "cvAfterMat":
+								cvAfterMatTime = ev.data.time;
+								cvMatTime = cvAfterMatTime - cvStartTime
+								break;
+
+							case "cvAfterResize":
+								cvAfterResizeTime = ev.data.time;
+								cvResizeTime = cvAfterResizeTime - cvAfterMatTime
+								break;
+
+							case "cvReady":
+								// opencv is loaded and ready!
+								console.log('OpenCV.js is ready');
+								openCVready = true				
+								break;
+
+							case "cvStatus":
+								// opencv sends status messages sometimes
+								cvStatusTxt = ev.data.msg;
+								break;
+						}
+					}
+
+					this.worker.addEventListener('error', (e) => { 
+						console.log("worker error:" + e) 
+					})
+				}
+
+                scalePreserveAspectRatio(imgW,imgH,maxW,maxH){
+                    return(Math.min((maxW/imgW),(maxH/imgH)));
+                }
+
+				// new session, tell it about our worker
+				newSession() {					
+					this.setVideoWorker(this.worker);
+				}
+
+				// when the window or video frame resizes, we need to resize and reposition
+				// the 2D overlay
+				adjustRenderCanvasSize (rotation, width, height) {
+					var cameraAspect;
+					console.log("adjustRenderCanvasSize: " + rotation + " degrees, " + width + " by " + height)
+					tempVideoCanvas.width = width;
+					tempVideoCanvas.height = height;
+
+					if(rotation == 90 ||  rotation == -90) {
+						cameraAspect = height / width;
+						cvImageDiv.width = height
+						cvImageDiv.height = width		
+					} else {
+						cameraAspect = width / height;
+						cvImageDiv.width = width
+						cvImageDiv.height = height		
+					}
+
+					// reposition to DIV
+					var windowWidth = this.session.baseLayer.framebufferWidth;
+					var windowHeight = this.session.baseLayer.framebufferHeight;
+					var windowAspect = windowWidth / windowHeight;
+
+					var translateX = 0;
+					var translateY = 0;
+					if (cameraAspect > windowAspect) {
+						windowWidth = windowHeight * cameraAspect;
+						translateX = -(windowWidth - this.session.baseLayer.framebufferWidth)/2;
+					} else {
+						windowHeight = windowWidth / cameraAspect; 
+						translateY = -(windowHeight - this.session.baseLayer.framebufferHeight)/2;
+					}
+
+					cvImageDiv.style.width = windowWidth.toFixed(2) + 'px'
+					cvImageDiv.style.height = windowHeight.toFixed(2) + 'px'		
+					cvImageDiv.style.transform = "translate(" + translateX.toFixed(2) + "px, "+ translateY.toFixed(2) + "px)"
+				}
+
+				// Called during construction
+				initializeScene(){
+					// Add a box at the scene origin
+					let box = new THREE.Mesh(
+						new THREE.BoxBufferGeometry(0.1, 0.1, 0.1),
+						new THREE.MeshPhongMaterial({ color: '#ff1f72' })
+					)
+					box.position.set(0, 0, 0)
+					var axesHelper = AxesHelper( 0.2 );
+		            this.floorGroup.add( axesHelper );
+					this.floorGroup.add(box)
+
+					this.scene.add(new THREE.AmbientLight('#FFF', 0.2))
+					let directionalLight = new THREE.DirectionalLight('#FFF', 0.6)
+					directionalLight.position.set(0, 10, 0)
+					this.scene.add(directionalLight)
+
+                    this.listenerSetup = false
+
+					console.log("Initialing scene ...")
+                    //this.createRemote()
+
+
+				}
+
+                createRemote(){
+                    remoteHolder.position.set(0, 0.6, -1);//plate.position.set(20, -15, -10)
+                    //this.floorGroup.add(remoteHolder)
+
+                    var gemsLength=0.1;//2;//every block size
+                    var hightDown=0;
+                    var boardPositionX=0;
+                    var gap = 0.002;//0.02;
+
+                    for (var i=0; i<noOfRemoteRow; i++) { //height // row
+                        for (var j=0; j<noOfRemoteColumn; j++) { //width // column
+                            //create remote Board
+                            var remoteBtnBG = new THREE.Mesh(
+                                new THREE.BoxBufferGeometry(gemsLength, 0.05, gemsLength), // 0.02, 0.04, 0.04
+                                new THREE.MeshPhongMaterial({color: '#ccc0b4'})
+                            )
+                            remoteBtnBG.position.set(boardPositionX+i*(gemsLength+gap),0,hightDown+j*(gemsLength+gap))
+                            remoteHolder.add(remoteBtnBG);
+
+                            //create remote Button
+                            grid[i][j] = new RemoteGrid()
+                            grid[i][j].gridNo=i*noOfRemoteColumn+j;
+                            grid[i][j].gridPositionX = boardPositionX+i*(gemsLength+gap);
+                            grid[i][j].gridPositionY = hightDown+j*(gemsLength+gap);
+                            grid[i][j].gridX=i;
+                            grid[i][j].gridY=j;
+                            var color = '#1317e9';
+                            if(grid[i][j].gridNo==0) color = '#e91218'
+							else if(grid[i][j].gridNo==1) color = '#e9b315'
+                            else color = '#1317e9'
+
+                            //Texture add
+                            var textureName = ['power', 'source', 'tv', 'hdmi', 'volumeUp', 'channelUp', 'volumeDown', 'channelDown', 'mute', 'previous']
+
+                            var texture = new THREE.TextureLoader().load( 'images/'+textureName[grid[i][j].gridNo]+'.png' );
+                            texture.wrapS = THREE.RepeatWrapping;
+                            //texture.repeat.set(1,-1) ;
+                            //texture.repeat.y =-1 ;
+                            //texture.offset.set(0.5, 0.2)
+
+                            var textureMesh = new THREE.Mesh(
+                                new THREE.CylinderGeometry(0.04, 0.04, 0.01), //( 0.5, 0.5, 5)
+                            	new THREE.MeshPhongMaterial( {color: color, map: texture, transparent: true, overdraw: true } ) //for texture
+                            )
+                            textureMesh.position.set(boardPositionX+i*(gemsLength+gap),0.031,hightDown+j*(gemsLength+gap))
+                            remoteHolder.add(textureMesh);
+
+                            //tesxture add end
+
+                            grid[i][j].gems = new THREE.Mesh(
+                                new THREE.CylinderGeometry(0.04, 0.04, 0.01), //( 0.5, 0.5, 5)
+                                new THREE.MeshPhongMaterial({color: color}),
+                            )
+                            grid[i][j].gems.position.set(boardPositionX+i*(gemsLength+gap),0.03,hightDown+j*(gemsLength+gap))
+
+                            remoteHolder.add(grid[i][j].gems);
+
+                        }
+                    }
+
+                    return remoteHolder;
+                }
+                remoteTouch(locationX,locationY){
+				   // if (!isRemoteCreated)
+				     //   return
+                    var objPos = this.toScreenPosition(grid[1][1].gems)
+                    //this.msgScore.innerHTML = "In RemoteTouch: "+grid[1][1].gridNo+ " ObjPos: " + objPos[0]
+
+                    var gridX = -1;
+                    var gridY = -1;
+                    var gridTouch = -1;
+                    outerloop: for (var i = 0; i < noOfRemoteRow; i++) {
+                        for (var j = 0; j < noOfRemoteColumn; j++) {
+
+                            var objPos = this.toScreenPosition(grid[i][j].gems)
+
+                            // msg = msg+"objX:"+ parseInt(objPos[0])+"objY:"+ parseInt(objPos[1])+"grid: "+ gridX + '+'+ gridY+",i="+i+",j="+j+" ..... ";
+
+                            if ((locationX >= objPos[0] - 60 && objPos[0] + 60 >= locationX) && (locationY >= objPos[1] - 60 && objPos[1] + 60 >= locationY)) {
+
+                                //gemsGrid[i][j].gems.material.color.setHex(0xff0000);
+
+                                gridX = i;
+                                gridY = j;
+                                gridTouch = grid[i][j].gridNo;
+                                this.msgScore.innerHTML = "grindNo" +grid[i][j].gridNo +"| x:" + locationX + ", y:" + locationY + "MinX:" + objPos[0] + "MinY:" + objPos[1] + ' match found' + "grid: " + gridX + ',' + gridY;
+                                break outerloop;
+                            }
+                        }
+                    }
+                    this.msgScore.innerHTML = "grid Touch: "+gridTouch;
+                    if(gridTouch!=-1){
+                        this.remote3DButtonPress(gridTouch)
+					}
+                }
+
+                toScreenPosition(obj) //3d to 2d touch conversion
+                {
+                    var vector = new THREE.Vector3();
+
+                    var widthHalf = 0.5*this.renderer.context.canvas.width;
+                    var heightHalf = 0.5*this.renderer.context.canvas.height;
+
+                    obj.updateMatrixWorld();
+                    vector.setFromMatrixPosition(obj.matrixWorld);
+                    vector.project(this.camera);
+
+                    vector.x = ( vector.x * widthHalf ) + widthHalf;
+                    vector.y = - ( vector.y * heightHalf ) + heightHalf;
+
+                    var screenPos = [vector.x,vector.y];
+
+                    return screenPos;
+                };
+
+				updateScene(frame){
+					this.lightEstimate = frame.lightEstimate || 0;
+					stats.update()
+
+					var txt = "<center>"
+					txt += "ARKit Light Estimate: " + this.lightEstimate.toFixed(2);
+					txt += "<br>" ;
+					if (cvStatusTxt.length > 0) {
+						txt += "OpenCV: " + cvStatusTxt + "<br>"
+					}
+					if (openCVready) {
+                        txt += "Please rotate your screen into landscape <br>"
+						txt += "Looking for TV/Monitor:<br>"
+						/*if (this.faceRects.length > 0) {
+							txt +=  "found " + this.faceRects.length.toString() + " faces and/or eyes"
+						}*/
+                        if (this.sdObjectRects.length > 0) {
+                            txt +=  "TV/Monitor found ";// + this.sdObjectRects.length.toString() + " TV";
+                            if(!isTVFound) {
+                               // connectMyTV()
+								isTVFound = true
+                            }
+                            noOfFrameNoTV=0;
+
+                        }
+						else {
+							txt += "NO TV/Monitor"
+                            noOfFrameNoTV++;
+							//this.msgScore.innerHTML = "f: "+noOfFrameNoTV;
+                           //-- isTVFound=false;
+						}
+
+						txt += "<br><br>idle / init / resize / detect:<br> " 
+						txt += cvIdleTime.toFixed(2) 
+						txt += " " + (cvMatTime).toFixed(2)
+						txt += " " + (cvResizeTime).toFixed(2)
+						txt += " " + (cvFaceTime).toFixed(2) 
+					} else {
+						txt += "(Initializing OpenCV)"
+					}
+
+					txt += "</center>"
+					this.messageText = txt;
+
+					if (this.messageText != this.textBox.innerHTML) {
+						this.textBox.innerHTML = this.messageText;
+					}
+
+					// do another check on frame size, to make sure we don't miss one
+					var viewport = frame.views[0].getViewport(this.session.baseLayer);
+					if (viewport.width != viewWidth || viewport.height != viewHeight) {
+						viewHeight = viewport.height;
+						viewWidth = viewport.width;
+
+						console.log("noticed view size is different than saved view size, trigger adjust canvas size")
+						this.triggerResize = true;
+					}
+
+
+					//for 3d glass anchor position
+                    if (!this.listenerSetup) {
+                        this.listenerSetup = true
+                      //  this.session.addEventListener(XRSession.NEW_WORLD_ANCHOR, this._handleNewWorldAnchor.bind(this))
+                      //  this.session.addEventListener(XRSession.UPDATE_WORLD_ANCHOR, this._handleUpdateWorldAnchor.bind(this))
+                       // this.session.addEventListener(XRSession.REMOVE_WORLD_ANCHOR, this._handleRemoveWorldAnchor.bind(this))
+                    }
+
+					// if (noOfFrameNoTV>300) {
+                    //     noOfFrameNoTV = 0;
+                    //     isRemoteCreated = false
+					// 	//this.scene.removeChild(group);
+					//
+                    // }
+					if (enableTV) {
+                        if (isTVFound) {
+                            if (!isRemoteCreated) {
+                                this.msgScore.innerHTML = "Tap to create Virtual Remote"
+                            }
+                            else {
+                                //  this.msgScore.innerHTML = "Tap on Remote button to use"
+
+                            }
+                        }
+                    }
+
+
+				}
+
+                _handleUpdateWorldAnchor(event) {
+                    let anchor = event.detail
+                    if (anchor instanceof XRFaceAnchor) {
+                        if (anchor.geometry !== null) {
+                            let currentVertexIndex = 0
+                            var position = this.glasses.geometry.attributes.position;
+                            for (let vertex of anchor.geometry.vertices) {
+                                position.setXYZ(currentVertexIndex++, vertex.x, vertex.y, vertex.z)
+                            }
+
+                            //this.faceMesh.geometry.verticesNeedUpdate = true;
+                            position.needsUpdate = true;
+                        }
+                    }
+                }
+
+				// show the video frame for debugging
+				showVideoFrame(videoFrame) {
+					var camera = videoFrame.camera
+					var buffer = videoFrame.buffer(0)
+
+					// this buffer is created in the worker, and if the worker
+					// doesn't access the frame, it won't be created.  So don't
+					// display the buffer if there is nothing to display yet!
+					if (!(buffer._buffer instanceof ArrayBuffer)) {
+						return;
+					}
+
+					if (!cvImageBuff || cvImageBuff.length != buffer._buffer.length) {
+						cvImageBuff = new Uint8ClampedArray(buffer._buffer);
+					}
+					var data = cvImageBuff
+
+					switch (videoFrame.pixelFormat) {
+						case XRVideoFrame.IMAGEFORMAT_YUV420P:
+							var len  = buffer.buffer.length
+							var rowExtra = buffer.size.bytesPerRow - buffer.size.bytesPerPixel * buffer.size.width;
+
+							var newData = new Uint8ClampedArray(len*4)
+							var j=0;
+							var i=0;
+							for (var r = 0; r < buffer.size.height; r++ ) {
+								for (var c = 0; c < buffer.size.width; c++) {
+									newData[j++] = data[i];
+									newData[j++] = data[i];
+									newData[j++] = data[i];
+									newData[j++] = 255;
+									i++;
+								}
+								i += rowExtra;
+							}
+							data = newData;
+							break;
+					}
+
+					var imgData = new ImageData(data, buffer.size.width, buffer.size.height);
+					tempVideoCanvasCtx.putImageData(imgData,0,0);
+					
+					var width = buffer.size.width
+					var height = buffer.size.height
+
+					cvImageCtx.clearRect(0, 0, width, height);
+
+					if (camera.cameraOrientation == 90 || camera.cameraOrientation == -90) {
+						cvImageCtx.translate(height/2, width/2); 
+					} else {
+						cvImageCtx.translate(width/2, height/2); 
+					}
+
+					// rotate by negative, since the cameraOrientation is the orientation of the
+					// camera relative to view and we want to undo that
+					cvImageCtx.rotate(-camera.cameraOrientation * Math.PI/180); 
+
+					cvImageCtx.drawImage(tempVideoCanvas, -width/2, -height/2);
+					cvImageCtx.resetTransform()
+				}
+
+                //Shaon Code start
+
+                _onTouchStart(ev){
+                    if (!ev.touches || ev.touches.length === 0) {
+                        console.error('No touches on touch event', ev)
+                        this.msgScore.innerHTML = "No Touch";
+                        return
+                    }
+
+                    const xw = ev.touches[0].clientX / window.innerWidth
+                    const yw = ev.touches[0].clientY / window.innerHeight
+
+                    //For TV
+
+					if (enableTV) {
+
+                        if (!isRemoteCreated) {
+                            this.create3dObject(xw, yw, "remote") //for test
+                            if (isTVFound) {
+                                this.create3dObject(xw, yw, "remote")
+                            }
+                        }
+
+                        //this.create3dObject(xw,yw);
+                        this.remoteTouch(ev.touches[0].clientX, ev.touches[0].clientY)
+                    }
+
+					//iphone WinSize and Video Buffer size is different, So we need to convert touch according to DIV touch point
+					const touchWinToDivX = ev.touches[0].clientX * cvImageDiv.width /  window.innerWidth
+                    const touchWinToDivY = ev.touches[0].clientY * cvImageDiv.height / window.innerHeight
+
+                    var consoleMsg="";
+
+					// control mouse
+
+                    //cvImageCtx.strokeRect(touchWinToDivX, touchWinToDivY, 20 , 20);
+
+                    //cvImageCtx.strokeRect(ev.touches[0].clientX-5, ev.touches[0].clientY-5, 10 , 10);
+                   // cvImageCtx.strokeRect(touchBufferTowinX, touchBufferTowinY, 10 , 10);
+                   /* if(!isBoxCreated){ //for testing
+                        cvImageCtx.strokeRect(mousePadOffsetX, mousePadOffsetY, mousePadWidth , mousePadHeight);
+                        isBoxCreated = true;
+
+                    }*/
+
+                    //temp testing
+                  /* if (!isBoxCreated){
+
+                       mousePadWidth = cvImageDiv.width - 40;//rect.width;
+                       mousePadHeight = cvImageDiv.height - 40;//rect.height;
+                       mousePadOffsetX = 20;//rect.x;
+                       mousePadOffsetY = 20;//rect.y;
+                       //  cvImageCtx.strokeRect(rect.x, rect.y, rect.width , rect.height);
+                       cvImageCtx.strokeRect(mousePadOffsetX, mousePadOffsetY, mousePadWidth, mousePadHeight);
+						isBoxCreated = true
+
+				   }*/
+                    //temptesting
+
+					//For Monitor
+
+					if (!enableTV) {
+
+                        // we substract offset to send the position to laptop
+                        var touchInBoxX = touchWinToDivX - mousePadOffsetX;
+                        var touchInBoxY = touchWinToDivY - mousePadOffsetY;
+
+                        //consoleMsg = "clickOn: " + ev.touches[0].clientX + ", " + ev.touches[0].clientY + " | padOffset: " + mousePadOffsetX + ',' + mousePadOffsetY + ' | pad Res: ' + mousePadWidth + ',' + mousePadHeight + " | CVImage Res: " + cvImageDiv.width + ", " + cvImageDiv.height + " | winRes: " + window.innerWidth + ", " + window.innerHeight + " | cvTouch: " + touchWinToDivX + ", " + touchWinToDivY + " | touchInBox: " + touchInBoxX + ", " + touchInBoxY;
+
+                        if (touchWinToDivX < mousePadOffsetX || touchWinToDivY < mousePadOffsetY || touchWinToDivX > mousePadOffsetX + mousePadWidth || touchWinToDivY > mousePadOffsetY + mousePadHeight) {
+                            if (isBoxCreated)
+                            	consoleMsg = consoleMsg + " <> tap outside"
+                        }
+                        else {
+                            this.press('tapPos', 'left/' + touchInBoxX + '/' + touchInBoxY + '/' + mousePadWidth + '/' + mousePadHeight)
+                            //this.press('hello')
+                            //consoleMsg = consoleMsg + " <> tap inside"
+                        }
+                        this.msgScore.innerHTML = consoleMsg;
+                    }
+
+
+                    console.log("============")
+
+                }
+
+                _onMouseDown(ev){
+
+                    //console.log('clickon: '+ev.clientX + ', '+ev.clientY);
+
+                    this._tapEventData = [
+                        ev.clientX,
+                        ev.clientY
+                    ]
+                    const xw = ev.clientX / window.innerWidth
+                    const yw = ev.clientY / window.innerHeight
+
+                    const touchWinToDivX = ev.clientX * cvImageDiv.width /  window.innerWidth
+                    const touchWinToDivY = ev.clientY * cvImageDiv.height / window.innerHeight
+
+					console.log("mouse click")
+					//this.create3dObject(xw,yw);
+                    this.remoteTouch(ev.clientX, ev.clientY)
+
+                    // this.createGlass(ev.clientX,ev.clientY)
+
+                    var consoleMsg="";
+
+                    //temp testing
+                   /*  if (!isBoxCreated){
+
+                         mousePadWidth = cvImageDiv.width - 40;//rect.width;
+                         mousePadHeight = cvImageDiv.height - 40;//rect.height;
+                         mousePadOffsetX = 20;//rect.x;
+                         mousePadOffsetY = 20;//rect.y;
+                         //  cvImageCtx.strokeRect(rect.x, rect.y, rect.width , rect.height);
+                         cvImageCtx.strokeRect(mousePadOffsetX, mousePadOffsetY, mousePadWidth, mousePadHeight);
+                          isBoxCreated = true
+
+                     }*/
+                    //temptesting
+
+                    var touchInBoxX = touchWinToDivX - mousePadOffsetX;
+                    var touchInBoxY = touchWinToDivY - mousePadOffsetY;
+
+                    consoleMsg = "clickOn: "+ev.clientX+", "+ev.clientY + " | padOffset: "+ mousePadOffsetX + ',' + mousePadOffsetY + ' | pad Res: '+mousePadWidth + ',' + mousePadHeight + " | CVImage Res: "+cvImageDiv.width+", "+ cvImageDiv.height + " | winRes: "+window.innerWidth+", "+window.innerHeight +" | cvTouch: "+xw + ", "+yw + " | touchInBox: "+touchInBoxX + ", "+touchInBoxY;
+
+                    if (touchInBoxX < 0 || touchInBoxY < 0 || touchInBoxX > mousePadWidth || touchInBoxY> mousePadHeight) {
+                        consoleMsg = consoleMsg + " <> click outside"
+                    }
+                    else{
+                        this.press('tapPos', 'left/' + touchInBoxX + '/' + touchInBoxY + '/' + mousePadWidth + '/' + mousePadHeight)
+                        consoleMsg = consoleMsg + " <> click inside"
+                    }
+                   // this.msgScore.innerHTML = consoleMsg;
+
+                    console.log("============")
+                }
+
+
+                create3dObject(posX, posY,objectName){
+				    // posX, posY should be converted value i.e. if its from touch then posX should be touchpos/window.innerWidth and if its from cvImageDiv, posX = react.x/cvImageDivWidth
+
+                    const x = posX /// window.innerWidth
+                    const y = posY /// window.innerHeight
+
+                    //this.msgScore.innerHTML = "created at X: "+posX + ', Y: '+posY;
+
+                    // Attempt a hit test using the normalized screen coordinates
+              /*      var myAnchorOffset = this.session.hitTest(x, y);
+                    let geometry = new THREE.BoxBufferGeometry(0.1, 0.1, 0.1)
+                    let material = new THREE.MeshPhongMaterial({ color: '#2e29ff' })
+                    let mesh = new THREE.Mesh(geometry, material)
+                    mesh.position.set(0, 0.05, 0)*/
+
+                 //   this.addAnchoredNode(myAnchorOffset, mesh)
+
+                     this.session.hitTest(x, y).then(anchorOffset => {
+                        if(anchorOffset === null){
+                            this.msgScore.innerHTML = 'miss'
+                        } else {
+                            if (objectName == "remote"){
+                                if(!is3DRemoteCreated) {
+                                   // this.msgScore.innerHTML = "Start Creating 3d remote";
+                                    this.addAnchoredNode(anchorOffset, this.createRemote());
+                                    isRemoteCreated = true;
+                                    is3DRemoteCreated = true;
+                                }
+							}
+							if (objectName == "text"){
+                                if(!isTextCreated) {
+                                    this.msgScore.innerHTML = "Start Creating 3d text";
+                                    this.addAnchoredNode(anchorOffset, this.createText());
+                                    isTextCreated = true;
+                                }
+							}
+
+                            //testing end
+                        }
+                    }).catch(err => {
+                        console.error('Error in hit test', err)
+                        this.msgScore.innerHTML='Erro hit:'+err
+                    })
+
+                }
+
+                createText(){
+
+                     let group = new THREE.Group()
+                     // let geometry = new THREE.BoxBufferGeometry(0.1, 0.1, 0.1)
+                     // let material = new THREE.MeshPhongMaterial({ color: '#2e29ff' })
+                     // let mesh = new THREE.Mesh(geometry, material)
+                     // mesh.position.set(0, 0.05, 0)
+                     // group.add(mesh)
+
+					//load Font
+                    var loader = new THREE.FontLoader();
+                    loader.load('helvetiker_regular.typeface.js', function (res) {
+                        var font = res;
+                        var text = createTextFont(font)
+						text.scale.set(0.008,0.008,0.008)
+						text.position.set(0,0.05,0)
+                        group.add(text)
+                    });
+
+					//load Font
+					return group
+
+                }
+
+                /// font load testing
+
+              /*  loadFont() {
+                    var loader = new THREE.FontLoader();
+                    loader.load('helvetiker_regular.typeface.js', function (res) {
+                        var font = res;
+                        var text = createText(font)
+						this.floorGroup.add(text)
+                    });
+                }*/
+
+                /// font load testing
+
+
+                connectBtn() { //remove this function... no need any more
+                    /*this.btn = document.createElement("BUTTON");
+                    this.t = document.createTextNode("Connect");
+                    this.btn.appendChild(this.t);
+                    document.body.appendChild(this.btn);*/
+
+                    tvConnectModal.style.display = "block";
+                    isTVFound=true;
+
+					/*
+                    this.tag = document.createElement;  // you are saving the function, not its context
+                    this.btn = this.tag.call(document, 'button');
+
+                    //  this.connectBtn = document.createElement('BUTTON')
+                    this.btn.style.position = 'absolute';
+                    // this.btn.style.top = '10px'
+                    // this.btn.style.left = (window.innerWidth/3).toString()+'px';//''10px
+                    this.t = document.createTextNode("Connect");
+                    this.btn.appendChild(this.t);
+                    this.btn.style.left = (window.innerWidth/2 - 50).toString()+'px';
+                    this.btn.style.bottom = (window.innerHeight/2).toString()+'px';
+                    this.btn.onclick = function() {
+                        console.log("connect button pressed");
+                        window.location.href = 'tvremote.html';
+                    };
+
+                    this.el.appendChild(this.btn)
+                    isTVFound=true;
+                    console.log('Connect button added');*/
+                }
+
+                remote3DButtonPress(gridNo){
+                    var method = ['power', 'source', 'tv', 'hdmi', 'volumeUp', 'channelUp', 'volumeDown', 'channelDown', 'mute', 'previousChannel']
+                    if (method[gridNo]!='notDefine') {
+                        this.press(method[gridNo])
+						this.msgScore.innerHTML = "press: "+ method[gridNo]
+                    }
+
+				}
+
+                press(method, param){
+                    console.log('press ' + method + ' ' + (param ? param : ''));
+                    var message = 'press ' + method + ' ' + (param ? param : '');
+                    var url = remoteURLPort + method; //mouse
+                    //var url = 'http://192.168.1.11:3000/' + method;
+                    if (typeof param !== 'undefined') {
+                        url += '/' + param;
+                    }
+                    /*$.get(url, function (data, status) {
+                        console.log('${data}')
+                    });*/
+                    //this.$http.get(url).then(console.log);
+					console.log("url: "+url)
+                    $.ajax({
+                        url:url,
+                        type:"get",
+                        success: function(result){
+                            console.log(result)
+                            message = message + ' |result : '+result;
+                            $(document).ready(function () {
+                                $('#errormsg').html("");
+                            });
+                        },
+                        error:function (error) {
+                            console.log('Error ${error}')
+                            console.log(error)
+                            message = message + ' |error : '+error;
+                            var errorMsg = 'Could not connect with TV! Check TV IP address in config file'
+                            $(document).ready(function () {
+                                $('#errormsg').html(errorMsg);
+                            });
+                        }
+                    })
+                    this.msgScore.innerHTML = message;
+                }
+
+                //Shaon Code
+			
+			}
+            function createTextFont(_font){
+                var font =_font;
+                var textGeo = new THREE.TextGeometry( 'Television', {
+                    font: font,
+                    height: 2,
+                    size: 10,
+                    curveSegments: 10,
+                    bevelThickness: 1,
+                    bevelSize: 0.3,
+                    bevelSegments: 3,
+                    bevelEnabled: true,
+                    weight: "normal",
+                });
+                textGeo.computeBoundingBox();
+                textGeo.computeVertexNormals();
+
+                var text = new THREE.Mesh(textGeo, cubeMat)
+                //text.position.x = textGeo.boundingBox.max.x/2;
+                text.position.set(0,0,0)
+                //text.scale.set(0.2,0.2,0.2)
+                //text.rotation.set(new THREE.Vector3( 0, 0, Math.PI / 2))
+                text.rotation.y=-Math.PI / 2;
+                text.castShadow = true;
+                console.log("text holder")
+				return text;
+
+                //this.textHolder.add(text)
+            }
+
+
+			function opencvIsReady() {
+				console.log('OpenCV.js is ready');
+				openCVready = true				
+			}
+
+			function AxesHelper( size ) {
+				size = size || 1;
+
+				var vertices = [
+					0, 0, 0,	size, 0, 0,
+					0, 0, 0,	0, size, 0,
+					0, 0, 0,	0, 0, size
+				];
+
+				var colors = [
+					1, 0, 0,	1, 0.6, 0,
+					0, 1, 0,	0.6, 1, 0,
+					0, 0, 1,	0, 0.6, 1
+				];
+
+				var geometry = new THREE.BufferGeometry();
+				geometry.addAttribute( 'position', new THREE.Float32BufferAttribute( vertices, 3 ) );
+				geometry.addAttribute( 'color', new THREE.Float32BufferAttribute( colors, 3 ) );
+
+				var material = new THREE.LineBasicMaterial( { vertexColors: THREE.VertexColors } );
+
+				return new THREE.LineSegments(geometry, material);
+			}
+
+                //modal for tv popup
+            var btn = document.getElementById("tvConnectModalBtn");
+            btn.onclick = function() {
+               // connectMyTV() // this function call from different place
+				redirectTVPage()
+            }
+            function connectMyTV() {
+                tvConnectModal.style.display = "block";
+                isTVFound=true;
+            }
+
+            function redirectTVPage (e){
+                console.log("connect button pressed");
+                window.location.href = 'tvremote.html';
+            }
+            span.onclick = function() {
+                tvConnectModal.style.display = "none";
+                //isTVFound=false;
+            }
+
+            // mousePad modal
+           /* var btnMousePad = document.getElementById("mousePadBtn");
+            btnMousePad.onclick = function() {
+                mousePadModal.style.display = "block";
+            }*/
+            var closePadbtn = document.getElementById("closePadBtn");
+            closePadbtn.onclick = function() {
+                mousePadModal.style.display = "none";
+            }
+
+            var closeRemotebtn = document.getElementById("closeRemoteBtn");
+            closeRemotebtn.onclick = function() {
+                tvRemoteModal.style.display = "none";
+            }
+
+            window.onclick = function(event) {
+              //  if (event.target == modal) {
+                    tvConnectModal.style.display = "none";
+                    mousePadModal.style.display = "none";
+                    tvRemoteModal.style.display = "none";
+                   // isTVFound=false;
+                //}
+            }
+            //load mouse pad at modal
+            $('button.btn.btn-primary').on('click', function(e) {
+                e.preventDefault();
+                var url = $(this).attr('href');
+                $(".modal-body").html('<iframe width="100%" height="100%" frameborder="0" scrolling="no" allowtransparency="true" src="'+url+'"></iframe>');
+            });
+			// modal pup END
+
+
+
+			window.addEventListener('DOMContentLoaded', () => {
+				setTimeout(() => {
+					try {
+						window.pageApp = new WebXRObjectDetection(document.getElementById('target'))
+					} catch(e) {
+						console.error('page error', e)
+					}
+				}, 1000)
+			})
+
+		</script>
+	</body>
+</html>

@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <style>
+      body {
+        background: black;
+        color: #2f4d59;
+      }
+      div {
+        border :1px solid #444444;
+        padding:1px;
+
+      }
+    </style>
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.1.3/css/bootstrap.min.css">
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.3/umd/popper.min.js"></script>
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.1.3/js/bootstrap.min.js"></script>
+
+  </head>
+
+  <body>
+  <div class="container">
+    <div class="row" justify-content-between>
+      <h2>Tensorflow Prediction for video</h2>
+    </div>
+    <div id="output" class="row">
+    </div>
+    <div class="row">
+      <div class="col-md-6 col-sm-12">
+        <video id="video" src="media/video.mp4" width="100%" height="100%" controls="true"/>
+      </div>
+      <div class="col-md-6 col-sm-12">
+        <canvas id="video_canvas" width="100%" height="100%"> </canvas>
+      </div>
+    </div>
+  </div>
+  <script src="../../dist/xrTensor-bundle.js"></script>
+  <script>
+      var cvImageDiv = document.getElementById("video_canvas");
+      var cvImageCtx = cvImageDiv.getContext('2d');
+      console.log(window.innerWidth)
+      let processor = {
+          timerCallback: function() {
+              if (this.video.paused || this.video.ended) {
+                  return;
+              }
+              this.computeFrame();
+              let self = this;
+              setTimeout(function () {
+                  self.timerCallback();
+              }, 0);
+          },
+
+          doLoad: function() {
+              this.video = document.getElementById("video");
+              let self = this;
+              this.video.addEventListener("play", function() {
+                  cvImageDiv.width = window.innerWidth/3.0; //self.video.videoWidth;
+                  cvImageDiv.height =  self.video.videoHeight/self.video.videoWidth*window.innerWidth/3.0;
+                  self.timerCallback();
+              }, false);
+          },
+
+          computeFrame: function() {
+              cvImageCtx.clearRect(0,0,cvImageDiv.width, cvImageDiv.height);
+              cvImageCtx.drawImage(this.video, 0, 0, cvImageDiv.width, cvImageDiv.height);
+
+              let frame = cvImageCtx.getImageData(0, 0, cvImageDiv.width, cvImageDiv.height);
+              let l = frame.data.length / 4;
+
+              for (let i = 0; i < l; i++) {
+                  let r = frame.data[i * 4 + 0];
+                  let g = frame.data[i * 4 + 1];
+                  let b = frame.data[i * 4 + 2];
+                 // if (g > 100 && r > 100 && b < 43)
+                  //    frame.data[i * 4 + 3] = 0;
+              }
+
+              XRTensor.xrTensorDetectionConsole(frame, function (predictions,loaded){
+                  //if(loaded)
+                   //   document.getElementById('output').innerText = "Tensorflow model is loaded. Play the video"
+
+                  //console.log('callback-');
+                 // console.log(predictions);
+                  //self.framePrediction = predictions;
+
+                  //rendering
+                  //cvImageCtx.clearRect(0,0,cvImageDiv.width, cvImageDiv.height);
+
+                  // Font options.
+                  const font = "16px sans-serif";
+
+                  cvImageCtx.font = font;
+                  cvImageCtx.textBaseline = "top";
+                  if(predictions != null) {
+
+                      predictions.forEach(prediction => {
+                          //objectNames = objectNames + " " + prediction.class.toString()
+                          //document.getElementById('output').innerText = "Found: "+ objectNames
+
+                          const x = prediction.bbox[0];
+                          const y = prediction.bbox[1];
+                          const width = prediction.bbox[2];
+                          const height = prediction.bbox[3];
+                          // Draw the bounding box.
+                          cvImageCtx.strokeStyle = "#2c6eff";
+                          cvImageCtx.lineWidth = 2;
+                          cvImageCtx.strokeRect(x, y, width, height);
+                          // Draw the label background.
+                          cvImageCtx.fillStyle = "#ffa714";
+                          const textWidth = cvImageCtx.measureText(prediction.class).width;
+                          const textHeight = parseInt(font, 10); // base 10
+                          cvImageCtx.fillRect(x, y, textWidth + 4, textHeight + 4);
+                      });
+
+                      predictions.forEach(prediction => {
+                          const x = prediction.bbox[0];
+                          const y = prediction.bbox[1];
+                          // Draw the text last to ensure it's on top.
+                          cvImageCtx.fillStyle = "#000000";
+                          cvImageCtx.fillText(prediction.class, x, y);
+                      });
+                  }
+
+                  //rendering end
+
+              })
+              return;
+          }
+      };
+
+      document.addEventListener("DOMContentLoaded", () => {
+          processor.doLoad();
+      });
+
+  </script>
+  </body>
+
+</html>

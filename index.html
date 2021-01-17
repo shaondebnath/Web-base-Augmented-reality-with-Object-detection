@@ -1,0 +1,134 @@
+<html lang="en">
+	<head>
+		<title>App Store</title>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1">
+		<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.1.3/css/bootstrap.min.css">
+		<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.3/umd/popper.min.js"></script>
+		<script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.1.3/js/bootstrap.min.js"></script>
+		<script src="https://cdn.jsdelivr.net/npm/vue@2.5.17/dist/vue.js"></script>
+
+		<!--<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css" integrity="sha384-Gn5384xqQ1aoWXA+058RXPxPg6fy4IWvTNh0E263XmFcJlSAwiGgFAW/dAiS6JXm" crossorigin="anonymous">-->
+		<style>
+			body {
+				display:flex;
+				align-items:center;
+			}
+		</style>
+
+	</head>
+	<body>
+
+	<div class="container">
+		<h2 align="center">App Store</h2>
+		<div id="products">
+			<!--{{deviceType}}-->
+			<div class="row">
+				<div v-for="product in allproducts" class="col-md-4 col-sm-6">
+					<div class="card" style="width: 100%">
+						<div class="card-body">
+							<div class="card-header bg-info" style="color:white; text-align: center">{{product.name}}</div>
+							<br/>
+							<div class="row w-100 justify-content-center align-items-center">
+								<br />
+									<img v-bind:src="'appstore/' + product.iconpath+'icon512.jpg'" v-bind:alt="'appstore/' + product.iconpath+'icon512.jpg'" style="width:256px;height:256px;"  align="center"/>
+								<br />
+							</div>
+							<br />
+							<div class="row w-100 justify-content-center align-items-center">
+								<br />
+								{{product.info}}
+								<br />
+							</div>
+							<br />
+							<div class="row  w-100 justify-content-center align-items-center">
+								<input class="btn btn-primary" type="button" value="Try it!" v-on:click="selectedApp(product.htmlpath);"/>
+							</div>
+						</div>
+						<br />
+					</div>
+					<br />
+				</div>
+			</div>
+		</div>
+	</div>
+
+	<script>
+		//check device
+		var myDeviceType="Not sure"
+        function isMobileDevice() {
+            return (typeof window.orientation !== "undefined") || (navigator.userAgent.indexOf('IEMobile') !== -1);
+        };
+
+        //if($.browser.device = (/android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/i.test(navigator.userAgent.toLowerCase())))
+        if(isMobileDevice())
+            myDeviceType = "Mobile"
+        else
+            myDeviceType = "Computer"
+
+        //read json file
+
+        function loadJSON(callback) {
+
+            var xobj = new XMLHttpRequest();
+            xobj.overrideMimeType("application/json");
+            xobj.open('GET', 'sd_applist.json', true); // Replace 'my_data' with the path to your file
+            xobj.onreadystatechange = function () {
+                if (xobj.readyState == 4 && xobj.status == "200") {
+                    // Required use of an anonymous callback as .open will NOT return a value but simply returns undefined in asynchronous mode
+                    callback(xobj.responseText);
+                }
+            };
+            xobj.send(null);
+        }
+
+        loadJSON(function(response) {
+            // Parse JSON string into object
+            var myJsonData = JSON.parse(response);
+           // console.log("i m called:"+myJsonData.length)
+            //for (var i=0; i< myJsonData.length;i++)
+              //  console.log("Product Name "+myJsonData[i].name + " Price: "+myJsonData[i].price)
+
+            //vue js
+            new Vue({
+
+                el: '#products',
+                data: {
+                    allproducts : myJsonData,
+					deviceType:myDeviceType,
+                },
+
+                methods: {
+                    submitValue: function(event){
+                    },
+					selectedApp:function (htmlName) {
+                        location.href = "appstore/"+htmlName;//+".html";
+                    }
+                },
+            });
+
+            //vue js end
+
+        });
+
+        //modal
+
+
+        //$('a.btn').on('click', function(e) {
+ /*       $('button.btn.btn-primary').on('click', function(e) {
+            e.preventDefault();
+            var url = $(this).attr('href');
+            $(".modal-body").html('<iframe width="100%" height="100%" frameborder="0" scrolling="no" allowtransparency="true" src="'+url+'"></iframe>');
+        });*/
+
+        // set mdoal view size
+       /* $(".modal-wide").on("show.bs.modal", function() {
+            var height = $(window).height() - 200;
+            $(this).find(".modal-body").css("height", height);
+        });*/
+
+	</script>
+
+	</body>
+</html>

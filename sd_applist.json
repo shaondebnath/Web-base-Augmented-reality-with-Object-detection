@@ -1,0 +1,52 @@
+[
+	{
+		"id": "1",
+		"name": "Detect TV/Monitor & Control",
+		"iconpath":"tvdetection/images/",
+		"htmlpath": "tvdetection/",
+		"info":"Tested on XRViewer browser iOS (> iPhone 6s). To control device, need to run TV / mouse control server in local network and configure the IP address."
+	},	
+	{
+		"id": "2",
+		"name": "Ecommerce Store",
+		"iconpath":"ecommerce/images/",
+		"htmlpath": "ecommerce/",
+		"info":"Tested on XRViewer browser iOS (> iPhone 6s). Work with all computer browsers."
+	},
+{
+		"id": "3",
+		"name": "Multiple Object Detection in WebXR",
+		"iconpath":"webxr-tensorflow/images/",
+		"htmlpath": "webxr-tensorflow/",
+		"info":"Work on safari iOS (> iPhone 7) and all computer browsers."
+	},	
+	{
+        "id": "4",
+        "name": "Education: 3D Model",
+		"iconpath":"education/images/",
+		"htmlpath": "education/",
+		"info":"Tested on XRViewer browser iOS (> iPhone 6s)."
+	},	
+	{
+		"id": "5",
+		"name": "Board Game",
+		"iconpath":"boardgame/images/",
+		"htmlpath": "boardgame/",
+		"info":"Work on XRViewer browser iOS (> iPhone 6s)."
+	},
+	{
+		"id": "6",
+		"name": "Video Analysis",
+		"iconpath":"videoanalysis-tf/images/",
+		"htmlpath": "videoanalysis-tf/",
+		"info":"Works best with computer browsers."
+	},
+	{
+		"id": "7",
+		"name": "Game Controlled by Object Detection)",
+		"iconpath":"game-objectDetection/images/",
+		"htmlpath": "game-objectDetection/",
+		"info":"Work on XRViewer browser iOS (> iPhone 6s)"
+	}
+	
+]

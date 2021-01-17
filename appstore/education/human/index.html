@@ -1,0 +1,486 @@
+<html>
+<head>
+	<title>Education</title>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+	<style>
+		body, html {
+			padding: 0;
+			margin: 0;
+			width: 100%;
+			height: 100%;
+			-webkit-user-select: none;
+			user-select: none;
+		}
+		#target {
+			width: 100%;
+			height: 100%;
+			position: absolute;
+		}
+		.common-message {
+			position: absolute;
+			top: 50%;
+			left: 50%;
+			transform: translate(-50%, -50%);
+			font-size: 20px;
+		}
+	</style>
+	<link rel="stylesheet" href="../../../common/common.css"/>
+	<script src="../../../libs/three.js"></script>
+	<script type="module" src="../../../polyfill/XRPolyfill.js"></script>
+	<script nomodule src="../../../dist/webxr-polyfill.js"></script>
+	<script src="../../../common/common.js"></script>
+	<script src="../../../libs/threejs/libs/tween.min.js"></script>
+	<script src="../../../libs/threejs/loaders/OBJLoader.js"></script>
+	<script src="../../../libs/three-gltf-loader.js"></script>
+	<script src="../../../libs/dat.gui.min.js"></script>
+
+
+
+</head>
+<body>
+<div id="target" />
+<!--<div onclick="hideMe(this)" id="description">
+	<h2>Hit Test</h2>
+	<h5>(click to dismiss)</h5>
+	<p>Find anchors by searching on tap events.</p>
+</div>-->
+<div id="buttonDiv" style="display: none">
+	<button id="resetBodyBtn">Reset Body</button>
+</div>
+
+<script>
+    var raycaster;
+    var mouse = new THREE.Vector2(), INTERSECTED;
+    var screenPos;
+	var touchCount=0;
+    var object;
+    var isObjectCreated = false;
+    var bodyScale=0.006, selectedBodyScale = 0.0061;
+    var textScale = 0.005;
+
+    var objectName = [
+        'mesh1.002_mesh1-geometry__03_-_Default1noCulli__03_-_Default1noCulli', //body
+        'mesh1.002_mesh1-geometry__02_-_Default1noCulli__02_-_Default1noCulli', //face
+        'mesh6.002_mesh6-geometry__01_-_Default1noCulli__01_-_Default1noCulli', //hair
+        'mesh4.002_mesh4-geometry__03_-_Default1noCulli__03_-_Default1noCulli', //rightHand
+        'mesh2.002_mesh2-geometry__03_-_Default1noCulli__03_-_Default1noCulli', //leftHand
+        'mesh5.002_mesh5-geometry__03_-_Default1noCulli__03_-_Default1noCulli', //rightLeg
+        'mesh3.002_mesh3-geometry__03_-_Default1noCulli__03_-_Default1noCulli' //lefteg
+    ]
+
+    var objectRealName = ['body','face','hair','right hand','left hand', 'right leg','left leg']
+
+    const plate = new THREE.Mesh(
+        new THREE.BoxBufferGeometry(0.0, 0.0, 0.0),//new THREE.BoxBufferGeometry(10, 0.1, 10),
+        //new THREE.BoxBufferGeometry(0.7, 0.02, 0.7),
+        new THREE.MeshPhongMaterial({color: '#DDFFDD'})
+    )
+	plate.name = "objectHolder"
+
+	var texture;
+    var btn = document.getElementById("resetBodyBtn");
+
+    class WebXRGame extends XRExampleBase {
+
+        constructor(domElement){
+            super(domElement, false)
+            this._tapEventData = null
+            this._messageEl = document.createElement('div')
+            this.el.appendChild(this._messageEl)
+            this._messageEl.style.position = 'absolute'
+            this._messageEl.style.bottom = '10px'
+            this._messageEl.style.left = '10px'
+            this._messageEl.style.color = 'white'
+            this._messageEl.style['font-size'] = '20px'
+
+            this.msgScore = document.createElement('div')
+            this.msgScore.style.position = 'absolute'
+            this.msgScore.style.top = '10px'
+            this.msgScore.style.left = (window.innerWidth/3).toString()+'px';//''10px
+            this.msgScore.style.color = 'white'
+            this.msgScore.style['font-size'] = '25px'
+            this.msgScore.innerHTML = '';
+            this.el.appendChild(this.msgScore)
+
+            this.el.addEventListener('touchstart', this._onTouchStart.bind(this), false);
+           // this.el.addEventListener('click',this._onMouseDown.bind(this), false);
+
+        }
+
+        initializeScene(){
+
+			// Add some lights to the scene
+            this.scene.add(new THREE.AmbientLight('#FFF', 0.2))
+            const directionalLight = new THREE.DirectionalLight('#FFF', 0.6)
+            directionalLight.position.set(0, 10, 0)
+            this.scene.add(directionalLight)
+            raycaster = new THREE.Raycaster();
+           // this.bottomMsg("Touch on screen to create Object")
+
+        }
+
+        createBody(){
+            //plate.position.set(50, -50, -200);//plate.position.set(20, -15, -10)
+            //this.floorGroup.add(plate)
+            //plate.position.set(0, 0, 0)
+            plate.position.set(0, 0.6, -1);
+
+            var geometry = new THREE.BoxBufferGeometry( 0.15, 0.02, 0.15 );
+            var objecta = new THREE.Mesh( geometry, new THREE.MeshLambertMaterial( { color: Math.random() * 0xffffff } ) );
+
+            objecta.position.x = 0;
+            objecta.position.y = -0.01;
+            objecta.position.z = 0;
+            objecta.name="base"
+            plate.add( objecta );
+
+            var manager = new THREE.LoadingManager( this.loadModel );
+            manager.onProgress = function ( item, loaded, total ) {
+                console.log( item, loaded, total );
+            };
+            // texture
+
+            var textureLoader = new THREE.TextureLoader( manager );
+            var mytexture = textureLoader.load( 'images/female02/02_-_Default1noCulling.JPG' );
+            texture = mytexture;
+            // model
+
+            function onProgress( xhr ) {
+
+                if ( xhr.lengthComputable ) {
+
+                    var percentComplete = xhr.loaded / xhr.total * 100;
+                    console.log( 'model ' + Math.round( percentComplete, 2 ) + '% downloaded' );
+
+                    this.msgScore.innerHTML = 'model ' + Math.round( percentComplete, 2 ) + '% loaded'
+
+                }
+
+            }
+
+            function onError() {}
+
+            var loader = new THREE.OBJLoader( manager );
+            loader.load( 'images/female02/female02.obj', function ( obj ) {
+                //loader.load( 'sd_models/obj_f_anatomy.obj', function ( obj ) {
+                object = obj;
+            }, onProgress, onError );
+
+			return plate
+		}
+
+        loadModel() {
+            var  tergateChild = new Array();
+            var  i=0;
+
+            object.traverse( function ( child ) {
+
+                if ( child.isMesh ) {
+                    //if (child.name == 'mesh1.002_mesh1-geometry__02_-_Default1noCulli__02_-_Default1noCulli')
+                    	//child.material.map = texture;
+                    //console.log(child)
+                    tergateChild[i]=child;
+                    i++;
+                }
+            } );
+
+            for(var j=0; j<tergateChild.length; j++){
+                tergateChild[j].position.x = 0;
+                //tergateChild[j].position.y = -100;
+                //tergateChild[j].position.z = - 150;
+                tergateChild[j].scale.x = bodyScale;
+                tergateChild[j].scale.y = bodyScale;
+                tergateChild[j].scale.z = bodyScale;
+                plate.add(tergateChild[j])
+
+            }
+            //object.position.y = - 95;
+            //plate.add( object );
+        }
+
+        updateScene(frame){
+            if (!isObjectCreated)
+                this.msgScore.innerHTML = "Tap to create new Body"
+
+
+
+/*
+            if(this._tapEventData !== null){
+                const x = this._tapEventData[0]
+                const y = this._tapEventData[1]
+
+                this._tapEventData = null
+
+                mouse.x = ( x / window.innerWidth ) * 2 - 1;
+                mouse.y = - ( y / window.innerHeight ) * 2 + 1;
+
+
+                // Attempt a hit test using the normalized screen coordinates
+                frame.findAnchor(x, y).then(anchorOffset => {
+                    if(anchorOffset === null){
+                    	//this._messageEl.innerHTML = 'miss, x: '+x + ', y:'+y + ', z: '+z
+                	} else {
+                    	//this._messageEl.innerHTML = 'hit, x: '+x + ', y:'+y+ ', z: '+z
+                    	//console.log("x="+ x + ", y="+y);
+                    	//this.addAnchoredNode(anchorOffset, this._createSceneGraphNode())
+                	}
+            	}).catch(err => {
+                    console.error('Error in hit test', err)
+            	})
+
+                this.touchBegin(x,y)
+            }
+			*/
+		}
+
+        _onTouchStart(ev) {
+            if (!ev.touches || ev.touches.length === 0) {
+                console.error('No touches on touch event', ev)
+                return
+            }
+            //save screen coordinates normalized to -1..1 (0,0 is at center and 1,1 is at top right)
+
+            this._tapEventData = [
+                ev.touches[0].clientX,// / window.innerWidth,
+                ev.touches[0].clientY// / window.innerHeight
+            ]
+            const xw = ev.touches[0].clientX / window.innerWidth
+            const yw = ev.touches[0].clientY / window.innerHeight
+            if (!isObjectCreated){
+                this.create3dObject(xw, yw);
+            }
+
+            //this.touchAction(ev.touches[0].clientX,ev.touches[0].clientY)
+            this.touchAction(xw, yw);
+
+
+        }
+
+        _onMouseDown(ev){
+            console.log('clickon: '+ev.clientX + ', '+ev.clientY);
+            ev.preventDefault();
+
+            this._tapEventData = [
+                ev.clientX,
+                ev.clientY
+            ]
+            const xw = ev.clientX / window.innerWidth
+            const yw = ev.clientY / window.innerHeight
+
+           // this.touchAction(ev.clientX,ev.clientY)
+            this.touchAction(xw, yw);
+        }
+
+        toScreenPosition(obj) //3d to 2d touch conversion
+        {
+            var vector = new THREE.Vector3();
+
+            var widthHalf = 0.5*this.renderer.context.canvas.width;
+            var heightHalf = 0.5*this.renderer.context.canvas.height;
+
+            obj.updateMatrixWorld();
+            vector.setFromMatrixPosition(obj.matrixWorld);
+            vector.project(this.camera);
+
+            vector.x = ( vector.x * widthHalf ) + widthHalf;
+            vector.y = - ( vector.y * heightHalf ) + heightHalf;
+
+            screenPos = [vector.x,vector.y];
+
+            return screenPos;
+
+            /*return {
+                x: vector.x,
+                y: vector.y
+            };*/
+
+        };
+
+        doRender() {
+            //requestAnimationFrame(super.doRender);
+            TWEEN.update();
+            this.renderer.clear()
+
+            this.renderer.render(this.scene, this.camera);
+        }
+
+        create3dObject(posX, posY){
+
+            const x = posX; /// window.innerWidth
+            const y = posY; /// window.innerHeight
+
+            this.session.hitTest(x, y).then(anchorOffset => {
+                if(anchorOffset === null){
+                    this._messageEl.innerHTML = 'Anchor point not found! Try again'
+                } else {
+
+                    /// Body Create
+                    isObjectCreated=true;
+                    document.getElementById("buttonDiv").style.display = "block";
+
+					this.msgScore.innerHTML = "Touch on body";
+					this.addAnchoredNode(anchorOffset, this.createBody());
+                    //testing end
+                }
+            }).catch(err => {
+                console.error('Error in hit test', err)
+                this.msgScore.innerHTML='Erro hit:'+err
+            })
+		}
+
+
+
+        touchAction(locationX, locationY) {
+            console.log('x,y: %d, %d',locationX,locationY);
+
+
+           // mouse.x = ( locationX / window.innerWidth ) * 2 - 1;
+           // mouse.y = - ( locationY / window.innerHeight ) * 2 + 1;
+            mouse.x =  locationX  * 2 - 1;
+            mouse.y = - locationY * 2 + 1;
+
+            var base = plate.getObjectByName( "TextHolder" );
+            plate.remove(base);
+
+            raycaster.setFromCamera( mouse, this.camera );
+
+            var intersects = raycaster.intersectObjects( plate.children );
+
+            if ( intersects.length > 0 ) {
+
+                if ( INTERSECTED != intersects[ 0 ].object ) {
+
+                    if ( INTERSECTED ) { //previous selected object back in previous state
+                        INTERSECTED.material.emissive.setHex( INTERSECTED.currentHex );
+                        INTERSECTED.scale.set(bodyScale,bodyScale,bodyScale)
+                    }
+
+                    INTERSECTED = intersects[ 0 ].object;
+                    INTERSECTED.currentHex = INTERSECTED.material.emissive.getHex();
+                    INTERSECTED.material.emissive.setHex( 0x0000ff );
+                    INTERSECTED.scale.set(selectedBodyScale,selectedBodyScale,selectedBodyScale)
+
+                    //INTERSECTED.position.y = -110;
+                    //console.log(INTERSECTED.name)
+                    for(var i=0; i<objectName.length;i++){
+                        if(objectName[i]==INTERSECTED.name) {
+                            this.bottomMsg("This is " + objectRealName[i])
+                            this.createText(i,INTERSECTED.position)
+                            break;
+                        }
+                    }
+
+                }
+
+            } else {
+
+                if ( INTERSECTED )
+                {
+                    INTERSECTED.material.emissive.setHex( INTERSECTED.currentHex );
+                    INTERSECTED.scale.set(bodyScale,bodyScale,bodyScale)
+
+                }
+
+                INTERSECTED = null;
+
+            }
+
+
+        }
+
+        createText(textId,position){
+            console.log('textid: '+textId + 'pos= '+position.x +','+position.y+','+position.z);
+            /*var geometry = new THREE.BoxBufferGeometry( 20, 20, 20 );
+            var objectText = new THREE.Mesh( geometry, new THREE.MeshLambertMaterial( { color: Math.random() * 0xffffff } ) );
+
+            objectText.position.x = position.x+50;
+            objectText.position.y = position.y+0;
+            objectText.position.z = position.z+20;
+            objectText.name="TextHolder";
+            plate.add( objectText );*/
+
+            let group = new THREE.Group()
+            //load Font
+            var loader = new THREE.FontLoader();
+            loader.load('helvetiker_regular.typeface.js', function (res) {
+                var font = res;
+                var text = createTextWithFont(objectRealName[textId],font)
+                //text.scale.set(0.008,0.008,0.008)
+                text.position.set(position.x+0.2,position.y+0.2,position.z+0.2)
+                text.scale.set(textScale,textScale,textScale)
+				text.name="TextHolder"
+                //group.add(text)
+                 plate.add(text)
+            });
+
+           // plate.add(group)
+
+        }
+
+
+        //above looks good
+
+
+
+
+        bottomMsg(msg){
+                this._messageEl.innerHTML = msg;
+
+        }
+
+
+            //add function here
+
+
+    }
+
+    function createTextWithFont(text,_font){
+        var font =_font;
+        var textGeo = new THREE.TextGeometry( text, {
+            font: font,
+            height: 2,
+            size: 10,
+            curveSegments: 10,
+            bevelThickness: 1,
+            bevelSize: 0.3,
+            bevelSegments: 3,
+            bevelEnabled: true,
+            weight: "normal",
+        });
+        textGeo.computeBoundingBox();
+        textGeo.computeVertexNormals();
+        var cubeMat = new THREE.MeshLambertMaterial({color: 0xff33ff})
+
+        var text = new THREE.Mesh(textGeo, cubeMat)
+        //text.position.x = textGeo.boundingBox.max.x/2;
+        text.position.set(0,0,0)
+        //text.scale.set(0.2,0.2,0.2)
+        //text.rotation.set(new THREE.Vector3( 0, 0, Math.PI / 2))
+       // text.rotation.y=-Math.PI / 2;
+        text.castShadow = true;
+        console.log("text holder")
+        return text;
+
+        //this.textHolder.add(text)
+    }
+    btn.onclick = function() {
+        isObjectCreated = false;
+    }
+
+
+    window.addEventListener('DOMContentLoaded', () => {
+        setTimeout(() => {
+        try {
+            window.pageApp = new WebXRGame(document.getElementById('target'))
+        } catch(e) {
+            console.error('page error', e)
+        }
+    }, 1000)
+    });
+
+
+
+</script>
+</body>
+</html>

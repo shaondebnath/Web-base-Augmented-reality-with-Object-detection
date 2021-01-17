@@ -1,0 +1,47 @@
+[
+	{
+		"id": "1",
+		"name": "Glass 1",
+		"price": "10 euro"
+	},
+	{
+		"id": "2",
+		"name": "Glass 2",
+		"price": "10 euro"
+	},
+	{
+        "id": 3,
+        "name": "Glass 3",
+		"price": "15 euro"
+	},
+	{
+		"id": 4,
+		"name": "Glass 4",
+		"price": "20 euro"
+	},
+	{
+		"id": 5,
+		"name": "Glass 5",
+		"price": "40 euro"
+	},
+	{
+		"id": 6,
+		"name": "Glass 6",
+		"price": "60 euro"
+	},
+	{
+		"id": 7,
+		"name": "Glass 7",
+		"price": "50 euro"
+	},
+	{
+		"id": 8,
+		"name": "Glass 8",
+		"price": "30 euro"
+	},
+	{
+		"id": 9,
+		"name": "Glass 9",
+		"price": "35 euro"
+	}
+]

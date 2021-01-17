@@ -1,0 +1,689 @@
+<html>
+	<head>
+		<title>OpenCV Face Detection example</title>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+		<style>
+			body, html {
+				padding: 0;
+				margin: 0;
+				width: 100%;
+				height: 100%;
+				overflow: hidden;
+				-webkit-overflow-scrolling: touch;			
+				-webkit-user-select: none;
+				user-select: none;
+			}
+			#target {
+				width: 100%;
+				height: 100%;
+				position: absolute;
+			}
+			#video_canvas {
+				transform: translate(-50%, 0);
+				opacity:0.5;
+				position:absolute;
+				top: 0;
+				left: 0;
+				border:1px solid green
+			}
+			.text-box {
+				position: absolute;
+				top: 5%;
+				left: 50%;
+				color: white;
+				background: rgba(27,55,55,0.75);;
+				outline: 1px solid rgba(127,255,255,0.75);
+				border: 0px;
+				padding: 5px 10px;
+				transform: translate(-50%, 0%);
+				font-size: 0.8em;
+			}
+			.common-message {
+				position: absolute;
+				top: 50%;
+				left: 50%;
+				transform: translate(-50%, -50%);
+				font-size: 10px;
+			}
+			img.crosshair {
+				position: absolute;
+				top: 50%;
+				left: 50%;
+				margin-left: -32px;
+				margin-top: -32px;
+			}
+		</style>
+
+		<link rel="stylesheet" href="../../common/common.css"/>
+		<script src="../../libs/three.js"></script>
+		<script src="../../libs/stats.js"></script>
+		<script src="../../dist/webxr-polyfill.js"></script>
+		<script src="../../common/common.js"></script>
+
+		<!--
+		<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@0.15.3/dist/tf.min.js"></script>
+		<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@0.14.0/dist/tf.min.js"></script>
+		<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
+		-->
+
+
+	</head>
+	<body>
+		<canvas id="video_canvas" width="100%" height="100%"> </canvas>
+
+		<div id="target" />
+		<!--<div class="container">
+			<div id="output"></div>
+		</div>-->
+		<script src="../../dist/xrTensor-bundle.js"></script>
+
+		<script>
+            var cvStatusTxt = "";
+			// set up for collecting different stats
+			var beginTime = ( performance || Date ).now(), prevTime = beginTime, frames = 0;	
+			
+			// set up some stats, including a new pane for CV fps
+			var stats = new Stats();
+			stats.domElement.style.cssText = 'position:fixed;top:2%;right:2%;cursor:pointer;opacity:0.9;z-index:10000';
+			var cvPanel = stats.addPanel( new Stats.Panel( 'tensor fps', '#ff8', '#221' ) );
+			stats.showPanel( 2 ); // 0: fps, 1: ms, 2: mb, 3+: custom
+			// a method to update a new panel for displaying CV FPS
+			var updateCVFPS = function () {
+				frames ++;
+				var time = ( performance || Date ).now();
+				if ( time >= prevTime + 1000 ) {
+					cvPanel.update( ( frames * 1000 ) / ( time - prevTime ), 100 );
+					prevTime = time;
+					frames = 0;
+				}
+				beginTime = time;
+			}
+			document.body.appendChild( stats.dom );
+
+			// keep track of what we think the view size is so we can adjust the 
+			// overlay used to render the 2D detection results
+			var viewWidth = 0;
+			var viewHeight = 0;
+
+			// various variables to hold values for statistics collected from the worker 
+			var cvStartTime = 0;
+			var cvAfterMatTime = 0;
+			var cvAfterResizeTime = 0;
+			var cvEndTime = 0;
+
+			var cvMatTime = 0;
+			var cvFaceTime = 0
+			var cvResizeTime = 0;
+			var cvIdleTime = 0;
+			
+			// has openCV loaded?
+			var openCVready = false;
+			
+			// for debugging, show the image we did the CV on 
+			var showCVImage = false;
+			var cvImageBuff = null
+			var tempVideoCanvas = document.createElement('canvas');
+			var tempVideoCanvasCtx = tempVideoCanvas.getContext('2d');
+
+			// a 2D buffer to show the 2D boxes in, and the video in
+			var cvImageDiv = document.getElementById("video_canvas");
+			var cvImageCtx = cvImageDiv.getContext('2d');
+
+            var sec=1;
+            //testing
+            var img = new Image();
+            var isPredctionDoneForFrame = true;
+            var isModelLoaded=false;
+
+
+            class ARAnchorExample extends XRExampleBase {
+				constructor(domElement){
+					super(domElement, false, true, true)
+
+					this.textBox = document.createElement('span')
+					this.textBox.setAttribute('class', 'text-box')
+					this.textBox.innerText = '0.0'
+					this.lightEstimate = 0;
+					this.el.appendChild(this.textBox)
+
+                    this.consoleBox = document.createElement('div')
+                    this.consoleBox.style.position = 'absolute'
+                    this.consoleBox.style.bottom = '10px'
+                    this.consoleBox.style.left = (window.innerWidth/3).toString()+'px';//''10px
+                    this.consoleBox.style.color = 'white'
+                    this.consoleBox.style['font-size'] = '25px'
+                    this.consoleBox.innerHTML = 'Loading ...';
+                    this.el.appendChild(this.consoleBox)
+
+					// some temp variables
+					this.rotation = -1;
+					this.triggerResize = true;
+					var self = this;
+                    this.framePrediction = null;
+
+                    this.el.addEventListener('touchstart', this._onTouchStart.bind(this), false);
+                    this.el.addEventListener('click',this._onMouseDown.bind(this), false);
+
+					// try to notice all resizes of the screen
+					window.addEventListener('resize', () => {
+						console.log("resize, trigger adjust canvas size")
+						this.triggerResize = true;
+					})
+
+					// new worker
+					this.worker = new Worker ("worker-tensor.js")
+
+					this.worker.onmessage = (ev) => {
+                        this.consoleBox.innerHTML = 'worker MSG';
+						switch (ev.data.type) {
+							case "cvFrame":
+
+								// finished with a frame!
+                                this.consoleBox.innerHTML = 'TensorFrame:' + sec;
+								var videoFrame = XRVideoFrame.createFromMessage(ev)
+
+								// timing
+								cvEndTime = ev.data.time;
+								cvFaceTime = cvEndTime - cvAfterResizeTime;
+
+								// see if the video frame sizes have changed, since
+								// we'll need to adjust the 2D overlay
+								var rotation = videoFrame.camera.cameraOrientation;
+								var buffer = videoFrame.buffer(0)
+
+								var width = buffer.size.width
+								var height = buffer.size.height
+								if (this.triggerResize || this.rotation != rotation) {
+									this.triggerResize = false;
+									this.rotation = rotation;
+									this.adjustRenderCanvasSize(rotation, width, height)
+								}
+
+								// are we showing the image (for debugging) or just the rectangles?
+								if (showCVImage) {
+									this.showVideoFrame(videoFrame)
+								} else {
+									//cvImageCtx.clearRect(0, 0, cvImageDiv.width, cvImageDiv.height);
+								}
+
+                                /*var imgData = cvImageCtx.createImageData(cvImageDiv.width, cvImageDiv.height)
+                                //var imgData = cvImageCtx.createImageData(width, height)
+
+                                var ubuf = new Uint8Array(videoFrame.buffer(0).buffer);
+                                /*for (var i=0;i < ubuf.length; i+=4) {
+                                    imgData.data[i]   = ubuf[i];   //red
+                                    imgData.data[i+1] = ubuf[i+1]; //green
+                                    imgData.data[i+2] = ubuf[i+2]; //blue
+                                    imgData.data[i+3] = ubuf[i+3]; //alpha
+                                }* /
+                                imgData.data.set(ubuf)*/
+
+
+                                //var base64Data = btoa(String.fromCharCode.apply(null, ubuf));
+
+								//cvImageCtx.putImageData(imgData,0,0)  // for debuging
+								//img.src = "catDog.jpg";
+                                //img.src ='data:image/png;base64,' + base64Data;
+
+
+                                //console.log("----------------")
+
+								//img.width=cvImageDiv.width;
+                                //img.height=cvImageDiv.height;
+                                //img.src=cvImageDiv.toDataURL()
+
+                                var objectNames=""+ sec + ":";
+
+
+                                //HTMLVideoElement, HTMLImageElement, HTMLCanvasElement or ImageData, but was Object
+								//this.createImageData(videoFrame.buffer(0).buffer, function (imgData) {
+                                this.createImageDataTFV2(videoFrame, function (imgData) {
+								    console.log("return to creteImagedata callback")
+                                    XRTensor.xrTensorDetectionConsole(imgData, function (predictions,loaded){
+                                        //document.getElementById('output').innerText = "callback"
+                                        /*renderTensorPrediction.call(predictions);
+                                        predictions.forEach(prediction => {
+                                            objectNames = objectNames + " " + prediction.class.toString()
+                                            document.getElementById('output').innerText = "Found: "+ objectNames
+                                        });*/
+                                        if (loaded)
+                                            isModelLoaded = true;
+
+                                        console.log('callback-');
+                                        console.log(predictions);
+                                        self.framePrediction = predictions;
+
+                                        //rendering
+                                        cvImageCtx.clearRect(0, 0, cvImageDiv.width, cvImageDiv.height);
+
+                                        // Font options.
+                                        const font = "16px sans-serif";
+
+                                        cvImageCtx.font = font;
+                                        cvImageCtx.textBaseline = "top";
+                                        if(predictions != null) {
+
+                                            predictions.forEach(prediction => {
+                                                //objectNames = objectNames + " " + prediction.class.toString()
+                                                //document.getElementById('output').innerText = "Found: "+ objectNames
+
+                                                const x = prediction.bbox[0];
+                                                const y = prediction.bbox[1];
+                                                const width = prediction.bbox[2];
+                                                const height = prediction.bbox[3];
+                                                // Draw the bounding box.
+                                                cvImageCtx.strokeStyle = "#2c6eff";
+                                                cvImageCtx.lineWidth = 2;
+                                                cvImageCtx.strokeRect(x, y, width, height);
+                                                // Draw the label background.
+                                                cvImageCtx.fillStyle = "#ffa714";
+                                                const textWidth = cvImageCtx.measureText(prediction.class).width;
+                                                const textHeight = parseInt(font, 10); // base 10
+                                                cvImageCtx.fillRect(x, y, textWidth + 4, textHeight + 4);
+                                            });
+
+                                            predictions.forEach(prediction => {
+                                                const x = prediction.bbox[0];
+                                                const y = prediction.bbox[1];
+                                                // Draw the text last to ensure it's on top.
+                                                cvImageCtx.fillStyle = "#000000";
+                                                cvImageCtx.fillText(prediction.class, x, y);
+                                            });
+                                        }
+
+                                        //rendering end
+										isPredctionDoneForFrame=true;
+
+                                        updateCVFPS();
+                                        videoFrame.release();
+                                        self.requestVideoFrame()
+                                    })
+
+                                })
+
+                                //XRTensor.xrTensorDetection(imgData, function (predictions){
+
+
+
+
+                                console.log("tensorcalled:"+sec)
+
+								// update CV fps, and release the image
+								// updateCVFPS();
+								// videoFrame.release();
+                                // this.requestVideoFrame();
+								break;
+
+							case "cvStart":
+								// request the next frame when the worker starts working on the current
+								// one, to pipeline a bit
+                                this.consoleBox.innerHTML = 'TensorStart';
+                                console.log(isPredctionDoneForFrame)
+							//	if (isPredctionDoneForFrame)
+								{
+                                    console.log("start-1: "+sec)
+                                    isPredctionDoneForFrame=false;
+								    this.requestVideoFrame();
+                                }
+
+								// has there been a delay since the last frame was finished processing?
+								// this shouldn't happen, but is a sign that the background tasks are
+								// being throttled
+								cvStartTime = ev.data.time;
+								if (cvEndTime > 0) {
+									cvIdleTime = cvStartTime - cvEndTime;
+								}
+								break;
+
+
+						}
+                        sec++;
+					}
+
+					this.worker.addEventListener('error', (e) => { 
+						console.log("worker error:" + e) 
+					})
+				}
+
+                createImageData(buffer, callback){
+                    var imgData = cvImageCtx.createImageData(cvImageDiv.width, cvImageDiv.height)
+                    //var imgData = cvImageCtx.createImageData(width, height)
+					var image = new Image()
+                    var ubuf = new Uint8Array(buffer);
+                    /*for (var i=0;i < ubuf.length; i+=4) {
+                        imgData.data[i]   = ubuf[i];   //red
+                        imgData.data[i+1] = ubuf[i+1]; //green
+                        imgData.data[i+2] = ubuf[i+2]; //blue
+                        imgData.data[i+3] = ubuf[i+3]; //alpha
+                    }*/
+                    imgData.data.set(ubuf)
+                    //cvImageCtx.putImageData(imgData,0,0)
+					image.width=cvImageDiv.width;
+                    image.height = cvImageDiv.height;
+                    image.src=cvImageDiv.toDataURL()
+					return callback(imgData);
+				}
+
+                createImageDataTFV2(videoFrame, callback) {
+                    var camera = videoFrame.camera
+                    var buffer = videoFrame.buffer(0)
+
+                    if (!(buffer._buffer instanceof ArrayBuffer)) {
+                        return;
+                    }
+
+                    if (!cvImageBuff || cvImageBuff.length != buffer._buffer.length) {
+                        cvImageBuff = new Uint8ClampedArray(buffer._buffer);
+                    }
+                    var data = cvImageBuff
+
+                    switch (videoFrame.pixelFormat) {
+                        case XRVideoFrame.IMAGEFORMAT_YUV420P:
+                            var len  = buffer.buffer.length
+                            var rowExtra = buffer.size.bytesPerRow - buffer.size.bytesPerPixel * buffer.size.width;
+
+
+
+                            var newData = new Uint8ClampedArray(len*4)
+                            var j=0;
+                            var i=0;
+                            for (var r = 0; r < buffer.size.height; r++ ) {
+                                for (var c = 0; c < buffer.size.width; c++) {
+                                    newData[j++] = data[i];
+                                    newData[j++] = data[i];
+                                    newData[j++] = data[i];
+                                    newData[j++] = 255;
+                                    i++;
+                                }
+                                i += rowExtra;
+                            }
+                            data = newData;
+                            break;
+                    }
+
+                    var imgData = new ImageData(data, buffer.size.width, buffer.size.height);
+                    return callback(imgData)
+                }
+
+                encode (input) {
+                    var keyStr = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=";
+                    var output = "";
+                    var chr1, chr2, chr3, enc1, enc2, enc3, enc4;
+                    var i = 0;
+
+                    while (i < input.length) {
+                        chr1 = input[i++];
+                        chr2 = i < input.length ? input[i++] : Number.NaN; // Not sure if the index
+                        chr3 = i < input.length ? input[i++] : Number.NaN; // checks are needed here
+
+                        enc1 = chr1 >> 2;
+                        enc2 = ((chr1 & 3) << 4) | (chr2 >> 4);
+                        enc3 = ((chr2 & 15) << 2) | (chr3 >> 6);
+                        enc4 = chr3 & 63;
+
+                        if (isNaN(chr2)) {
+                            enc3 = enc4 = 64;
+                        } else if (isNaN(chr3)) {
+                            enc4 = 64;
+                        }
+                        output += keyStr.charAt(enc1) + keyStr.charAt(enc2) +
+                            keyStr.charAt(enc3) + keyStr.charAt(enc4);
+                    }
+                    return output;
+                }
+
+				// new session, tell it about our worker
+				newSession() {					
+					this.setVideoWorker(this.worker);
+				}
+
+				// when the window or video frame resizes, we need to resize and reposition
+				// the 2D overlay
+				adjustRenderCanvasSize (rotation, width, height) {
+					var cameraAspect;
+					console.log("adjustRenderCanvasSize: " + rotation + " degrees, " + width + " by " + height)
+					tempVideoCanvas.width = width;
+					tempVideoCanvas.height = height;
+
+					if(rotation == 90 ||  rotation == -90) {
+						cameraAspect = height / width;
+						cvImageDiv.width = height
+						cvImageDiv.height = width		
+					} else {
+						cameraAspect = width / height;
+						cvImageDiv.width = width
+						cvImageDiv.height = height		
+					}
+
+					// reposition to DIV
+					var windowWidth = this.session.baseLayer.framebufferWidth;
+					var windowHeight = this.session.baseLayer.framebufferHeight;
+					var windowAspect = windowWidth / windowHeight;
+
+					var translateX = 0;
+					var translateY = 0;
+					if (cameraAspect > windowAspect) {
+						windowWidth = windowHeight * cameraAspect;
+						translateX = -(windowWidth - this.session.baseLayer.framebufferWidth)/2;
+					} else {
+						windowHeight = windowWidth / cameraAspect; 
+						translateY = -(windowHeight - this.session.baseLayer.framebufferHeight)/2;
+					}
+
+					cvImageDiv.style.width = windowWidth.toFixed(2) + 'px'
+					cvImageDiv.style.height = windowHeight.toFixed(2) + 'px'		
+					cvImageDiv.style.transform = "translate(" + translateX.toFixed(2) + "px, "+ translateY.toFixed(2) + "px)"
+				}
+
+				// Called during construction
+				initializeScene(){
+					// Add a box at the scene origin
+					let box = new THREE.Mesh(
+						new THREE.BoxBufferGeometry(0.1, 0.1, 0.1),
+						new THREE.MeshPhongMaterial({ color: '#DDFFDD' })
+					)
+					box.position.set(0, 0, 0)
+					var axesHelper = AxesHelper( 0.2 );
+		            this.floorGroup.add( axesHelper );
+					this.floorGroup.add(box)
+
+					this.scene.add(new THREE.AmbientLight('#FFF', 0.2))
+					let directionalLight = new THREE.DirectionalLight('#FFF', 0.6)
+					directionalLight.position.set(0, 10, 0)
+					this.scene.add(directionalLight)
+				}
+
+				updateScene(frame){
+					this.lightEstimate = frame.lightEstimate || 0;
+					stats.update()
+
+					var txt = "<center>"
+					txt += "ARKit Light Estimate: " + this.lightEstimate.toFixed(2);
+					txt += "<br>" ;
+					if (!isModelLoaded)
+                        txt += "Wait ... TensorFlow model is loading ... <br>"
+					else {
+                        txt += "TensorFlow is loaded<br>"
+                        txt += "Touch on the name for more Info"
+                    }
+
+
+					txt += "</center>"
+					this.messageText = txt;
+
+					if (this.messageText != this.textBox.innerHTML) {
+						this.textBox.innerHTML = this.messageText;
+					}
+
+					// do another check on frame size, to make sure we don't miss one
+					var viewport = frame.views[0].getViewport(this.session.baseLayer);
+					if (viewport.width != viewWidth || viewport.height != viewHeight) {
+						viewHeight = viewport.height;
+						viewWidth = viewport.width;
+
+						console.log("noticed view size is different than saved view size, trigger adjust canvas size")
+						this.triggerResize = true;
+					}
+				}
+
+                _onTouchStart(ev){
+                    if (!ev.touches || ev.touches.length === 0) {
+                        console.error('No touches on touch event', ev)
+                        return
+                    }
+                    //save screen coordinates normalized to -1..1 (0,0 is at center and 1,1 is at top right)
+                    this._tapEventData = [
+                        ev.touches[0].clientX,// / window.innerWidth,
+                        ev.touches[0].clientY// / window.innerHeight
+                    ]
+                    // this.touchBegin(ev.touches[0].clientX,ev.touches[0].clientY)
+                    const touchWinToDivX = ev.touches[0].clientX * cvImageDiv.width /  window.innerWidth
+                    const touchWinToDivY = ev.touches[0].clientY * cvImageDiv.height / window.innerHeight
+
+                    this.objectInformation(touchWinToDivX,touchWinToDivY);
+                }
+
+                _onMouseDown(ev){
+                    //console.log('clickon: '+ev.clientX + ', '+ev.clientY);
+                    this._tapEventData = [
+                        ev.clientX,
+                        ev.clientY
+                    ]
+
+                    const touchWinToDivX = ev.clientX * cvImageDiv.width /  window.innerWidth
+                    const touchWinToDivY = ev.clientY * cvImageDiv.height / window.innerHeight
+                    this.objectInformation(touchWinToDivX,touchWinToDivY);
+                }
+
+
+
+                objectInformation(touchX,touchY){
+
+                    if(this.framePrediction!=null) {
+                        //console.log(this.framePrediction)
+                        const font = "16px sans-serif";
+                        this.framePrediction.forEach(prediction => {
+                            const x = prediction.bbox[0]-10;
+                            const y = prediction.bbox[1]-10;
+                            const textWidth = cvImageCtx.measureText(prediction.class).width + 20 + x;
+                            const textHeight = parseInt(font, 10) + 20 + y; // base 10
+                            if (touchX >= x && touchX <= textWidth && touchY >= y && touchY <= textHeight) {
+                                //console.log("........................................ touch on: " + prediction.class);
+                                this.consoleBox.innerHTML = " touch on: " + prediction.class;
+                                window.location.href = "https://en.wikipedia.org/wiki/"+prediction.class;
+                            }
+                            else {
+                                //console.log(".............................Outside: " + touchX + ", " + x + ", " + textWidth)
+                                //msg = msg +" Outside: " + touchX + " | " + x + "-" + textWidth + ", H: "+ touchY+ " : " + y + "-"+ textHeight;
+                                this.consoleBox.innerHTML = "Touch on Object Name"
+                            }
+                        });
+                    }
+                }
+
+
+				// show the video frame for debugging
+				showVideoFrame(videoFrame) {
+					var camera = videoFrame.camera
+					var buffer = videoFrame.buffer(0)
+
+					// this buffer is created in the worker, and if the worker
+					// doesn't access the frame, it won't be created.  So don't
+					// display the buffer if there is nothing to display yet!
+					if (!(buffer._buffer instanceof ArrayBuffer)) {
+						return;
+					}
+
+					if (!cvImageBuff || cvImageBuff.length != buffer._buffer.length) {
+						cvImageBuff = new Uint8ClampedArray(buffer._buffer);
+					}
+					var data = cvImageBuff
+
+					switch (videoFrame.pixelFormat) {
+						case XRVideoFrame.IMAGEFORMAT_YUV420P:
+							var len  = buffer.buffer.length
+							var rowExtra = buffer.size.bytesPerRow - buffer.size.bytesPerPixel * buffer.size.width;
+
+							var newData = new Uint8ClampedArray(len*4)
+							var j=0;
+							var i=0;
+							for (var r = 0; r < buffer.size.height; r++ ) {
+								for (var c = 0; c < buffer.size.width; c++) {
+									newData[j++] = data[i];
+									newData[j++] = data[i];
+									newData[j++] = data[i];
+									newData[j++] = 255;
+									i++;
+								}
+								i += rowExtra;
+							}
+							data = newData;
+							break;
+					}
+
+					var imgData = new ImageData(data, buffer.size.width, buffer.size.height);
+					tempVideoCanvasCtx.putImageData(imgData,0,0);
+					
+					var width = buffer.size.width
+					var height = buffer.size.height
+
+					cvImageCtx.clearRect(0, 0, width, height);
+
+					if (camera.cameraOrientation == 90 || camera.cameraOrientation == -90) {
+						cvImageCtx.translate(height/2, width/2); 
+					} else {
+						cvImageCtx.translate(width/2, height/2); 
+					}
+
+					// rotate by negative, since the cameraOrientation is the orientation of the
+					// camera relative to view and we want to undo that
+					cvImageCtx.rotate(-camera.cameraOrientation * Math.PI/180); 
+
+					cvImageCtx.drawImage(tempVideoCanvas, -width/2, -height/2);
+					cvImageCtx.resetTransform()
+				}
+			
+			}
+			function opencvIsReady() {
+				console.log('OpenCV.js is ready');
+				openCVready = true				
+			}
+
+			function AxesHelper( size ) {
+				size = size || 1;
+
+				var vertices = [
+					0, 0, 0,	size, 0, 0,
+					0, 0, 0,	0, size, 0,
+					0, 0, 0,	0, 0, size
+				];
+
+				var colors = [
+					1, 0, 0,	1, 0.6, 0,
+					0, 1, 0,	0.6, 1, 0,
+					0, 0, 1,	0, 0.6, 1
+				];
+
+				var geometry = new THREE.BufferGeometry();
+				geometry.addAttribute( 'position', new THREE.Float32BufferAttribute( vertices, 3 ) );
+				geometry.addAttribute( 'color', new THREE.Float32BufferAttribute( colors, 3 ) );
+
+				var material = new THREE.LineBasicMaterial( { vertexColors: THREE.VertexColors } );
+
+				return new THREE.LineSegments(geometry, material);
+			}
+
+
+			window.addEventListener('DOMContentLoaded', () => {
+				setTimeout(() => {
+					try {
+						window.pageApp = new ARAnchorExample(document.getElementById('target'))
+					} catch(e) {
+						console.error('page error', e)
+					}
+				}, 1000)
+			})
+		</script>
+	</body>
+</html>

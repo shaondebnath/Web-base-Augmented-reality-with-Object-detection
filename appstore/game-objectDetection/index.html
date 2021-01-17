@@ -1,0 +1,1058 @@
+<html>
+	<head>
+		<title>Game with Object Detection</title>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+		<style>
+			body, html {
+				padding: 0;
+				margin: 0;
+				width: 100%;
+				height: 100%;
+				overflow: hidden;
+				-webkit-overflow-scrolling: touch;			
+				-webkit-user-select: none;
+				user-select: none;
+			}
+			#target {
+				width: 100%;
+				height: 100%;
+				position: absolute;
+			}
+			#video_canvas {
+				transform: translate(-50%, 0);
+				opacity:0.5;
+				position:absolute;
+				top: 0;
+				left: 0;
+				border:1px solid green
+			}
+			.text-box {
+				position: absolute;
+				top: 5%;
+				left: 50%;
+				color: white;
+				background: rgba(27,55,55,0.75);;
+				outline: 1px solid rgba(127,255,255,0.75);
+				border: 0px;
+				padding: 5px 10px;
+				transform: translate(-50%, 0%);
+				font-size: 0.8em;
+			}
+			.common-message {
+				position: absolute;
+				top: 50%;
+				left: 50%;
+				transform: translate(-50%, -50%);
+				font-size: 10px;
+			}
+			img.crosshair {
+				position: absolute;
+				top: 50%;
+				left: 50%;
+				margin-left: -32px;
+				margin-top: -32px;
+			}
+
+			/* horizontal scroll bootstrap*/
+			.testimonial-group > .row {
+				overflow-x: auto;
+				white-space: nowrap;
+			}
+			.testimonial-group > .row > .col-xs-4 {
+				display: inline-block;
+				float: none;
+			}
+
+			/* Decorations */
+			.col-xs-4 { color: #fff; font-size: 12px; padding-bottom: 20px; padding-top: 18px; padding-left: 5px; text-align: center}
+			.col-xs-4:nth-child(3n+1) { background: #c69; }
+			.col-xs-4:nth-child(3n+2) { background: #9c6; }
+			.col-xs-4:nth-child(3n+3) { background: #69c; }
+
+			/* scroll end*/
+			#products {
+				position: fixed;
+				bottom: 0;
+				width: 110%;
+
+			}
+
+			.button {
+				background-color: #2c6eff;
+				color: #FFFFFF;
+				padding: 10px;
+				border-radius: 10px;
+				-moz-border-radius: 10px;
+				-webkit-border-radius: 10px;
+				margin:10px
+			}
+			.big-btn {
+				width: 90px;
+				height: 20px;
+			}
+		</style>
+		<link rel="stylesheet" href="../../common/common.css"/>
+		<!--<link rel="stylesheet" href="common/scrollview.css"/>-->
+
+		<script src="../../libs/three.js"></script>
+		<script src="../../libs/stats.js"></script>
+		<!--<script type="module" src="polyfill/XRPolyfill.js"></script>
+		<script nomodule src="dist/webxr-polyfill.js"></script>-->
+		<script src="../../dist/webxr-polyfill.js"></script>
+		<script src="../../common/common.js"></script>
+		<script src="../../libs/three-gltf-loader.js"></script>
+		<script src="../../libs/dat.gui.min.js"></script>
+
+		<!--<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.1.3/css/bootstrap.min.css">
+		<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css">
+		<link rel="stylesheet" href="common/bootstrap337.min.css"/>
+		<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.3/umd/popper.min.js"></script>
+		<script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.1.3/js/bootstrap.min.js"></script> -->
+
+
+		<script src="../../libs/threejs/libs/tween.min.js"></script>
+		<script src="class/EquipEnemyGrid.js"></script>
+
+
+
+	</head>
+	<body>
+		<!-- place to render detected face rectanges over the video frame -->
+		<canvas id="video_canvas" width="100%" height="100%"> </canvas>
+
+		<div id="target" />
+<!--		<div onclick="hideMe(this)" id="description">
+			<h2>OpenCV Face Detection Demo</h2>
+			<h5>(click to dismiss)</h5>
+			<p>Use OpenCV to find faces and draw boxes around them in 2D.</p>
+		</div>
+-->
+		<div id="buttonDiv" style="display: none">
+			<div class="button big-btn" id="resetBodyBtn">Reset Board </div>
+			<!--<button id="resetBodyBtn">Reset Board</button>-->
+		</div>
+
+		<script>
+			var cvStatusTxt = "";
+			// set up for collecting different stats
+			var beginTime = ( performance || Date ).now(), prevTime = beginTime, frames = 0;	
+			
+			// set up some stats, including a new pane for CV fps
+			var stats = new Stats();
+			stats.domElement.style.cssText = 'position:fixed;top:2%;right:2%;cursor:pointer;opacity:0.9;z-index:10000';
+			var cvPanel = stats.addPanel( new Stats.Panel( 'CV fps', '#ff8', '#221' ) );
+			stats.showPanel( 2 ); // 0: fps, 1: ms, 2: mb, 3+: custom
+			// a method to update a new panel for displaying CV FPS
+			var updateCVFPS = function () {
+				frames ++;
+				var time = ( performance || Date ).now();
+				if ( time >= prevTime + 1000 ) {
+					cvPanel.update( ( frames * 1000 ) / ( time - prevTime ), 100 );
+					prevTime = time;
+					frames = 0;
+				}
+				beginTime = time;
+			}
+			document.body.appendChild( stats.dom );
+
+			// keep track of what we think the view size is so we can adjust the 
+			// overlay used to render the 2D detection results
+			var viewWidth = 0;
+			var viewHeight = 0;
+
+			// various variables to hold values for statistics collected from the worker 
+			var cvStartTime = 0;
+			var cvAfterMatTime = 0;
+			var cvAfterResizeTime = 0;
+			var cvEndTime = 0;
+
+			var cvMatTime = 0;
+			var cvFaceTime = 0
+			var cvResizeTime = 0;
+			var cvIdleTime = 0;
+			
+			// has openCV loaded?
+			var openCVready = false;
+			
+			// for debugging, show the image we did the CV on 
+			var showCVImage = false;
+			var cvImageBuff = null
+			var tempVideoCanvas = document.createElement('canvas');
+			var tempVideoCanvasCtx = tempVideoCanvas.getContext('2d');
+
+			// a 2D buffer to show the 2D boxes in, and the video in
+			var cvImageDiv = document.getElementById("video_canvas");
+			var cvImageCtx = cvImageDiv.getContext('2d');
+
+            var gemsLengthX=0.03;
+            var gemsLengthY=0.1;
+            var hightDown=0;
+            var boardPositionX=-0.4;
+            var boardPositionY=0.5;
+            var gap = 0.002;
+            var boardwidthCell = 26;
+            var gemsGrid = new Array(boardwidthCell);
+            var isBoardCreated = false;
+			var resetBtn = document.getElementById("resetBodyBtn");
+            var isResetTap =false;
+
+
+
+			////brick Game
+
+			var plateWidth = 0.8;
+            var plateHeight = 1.2;
+			var dx = 0.01;
+            var dy = -0.01;
+            var ballX = 0.0;
+            var ballY = 0.0;
+            var paddleHeight=10;
+            var paddleWidth=75;
+           // var paddleX=(canvas.width-paddleWidth)/2;
+            var ballRadius=0.04;
+            var brickRowCount=3;
+            var brickColumnCount=5;
+
+            var count=brickRowCount*brickColumnCount;
+            var rem=count;
+
+            var score = 0;
+            var lives = 3;  // How many lives player has to complete the game
+            var gameWinScore = 5;
+			var scoreComputer = 0;
+			var scorePlayer = 0;
+
+            var brickLength =[0.12,0.1,0.03]
+
+            var bricks=[];
+            for(c=0;c<brickColumnCount;++c){
+                bricks[c]=[];
+                for(r=0;r<brickRowCount;++r){
+                    bricks[c][r]={x:0,y:0,status:1};
+                }
+
+            }
+
+            //sd
+            const plate = new THREE.Mesh(
+                new THREE.BoxBufferGeometry(plateWidth, 0.05, plateHeight),//new THREE.BoxBufferGeometry(10, 0.1, 10),
+                new THREE.MeshPhongMaterial({color: '#52c682'})
+            )
+            //var basePlayerSize = [ 0.02, 0.04, 0.04]
+            const basePlayer=new THREE.Mesh(
+                new THREE.BoxBufferGeometry(0.15, 0.1, 0.03),//new THREE.CylinderGeometry(gemsPlayerSize[0], gemsPlayerSize[1], gemsPlayerSize[2]), //( 0.5, 0.5, 5)
+                new THREE.MeshPhongMaterial({color: '#3ec5e9'})
+            )
+
+            const baseComputer=new THREE.Mesh(
+                new THREE.BoxBufferGeometry(0.15, 0.1, 0.03),//new THREE.CylinderGeometry(gemsPlayerSize[0], gemsPlayerSize[1], gemsPlayerSize[2]), //( 0.5, 0.5, 5)
+                new THREE.MeshPhongMaterial({color: '#e90012'})
+            )
+
+            const ball =new THREE.Mesh(
+                new THREE.CylinderGeometry(0.04,0.04,0.08),
+                new THREE.MeshPhongMaterial({color: '#f3f1f2'})
+            )
+
+            var brickGrid = new Array(count);
+            for (var i = 0; i <count; i++)
+                brickGrid[i] = new Array(count);
+
+            var brickPositionX=-0.4;
+            var brickPositionY=-0.5;
+            var brickGap = 0.02
+
+			var ballFrame =0;
+            var isGamePause = true;
+            var isGameGameOver = false;
+
+
+
+			////Brick Game End
+
+			class WebXRObjectDetection extends XRExampleBase {
+				constructor(domElement){
+					super(domElement, false, true, true)
+
+					this.textBox = document.createElement('span')
+					this.textBox.setAttribute('class', 'text-box')
+					this.textBox.innerText = '0.0'
+					this.faceRects = [];
+					this.eyeRects = [];
+                    this.sdObjectRects =[];
+					this.lightEstimate = 0;
+					this.el.appendChild(this.textBox)
+
+                    this.msgScore = document.createElement('div')
+                    this.msgScore.style.position = 'absolute'
+                    this.msgScore.style.bottom = '10px'
+                    this.msgScore.style.left = (window.innerWidth/3).toString()+'px';//''10px
+                    this.msgScore.style.color = 'white'
+                    this.msgScore.style['font-size'] = '25px'
+                    this.msgScore.innerHTML = 'Wait for OpenCV';
+                    this.el.appendChild(this.msgScore)
+
+                    this.infoMsg = document.createElement('div')
+                    this.infoMsg.style.position = 'absolute'
+                    this.infoMsg.style.bottom = (window.innerHeight/2).toString()+'px';
+                    this.infoMsg.style.left = (window.innerWidth/4).toString()+'px';//''10px
+                    this.infoMsg.style.color = 'white'
+                    this.infoMsg.style['font-size'] = '25px'
+                    this.infoMsg.innerHTML = 'Touch to create Board'; //'Wait for OpenCV \n Or \n Touch to play by tap on screen';
+                    this.el.appendChild(this.infoMsg)
+
+                    this.el.addEventListener('touchstart', this._onTouchStart.bind(this), false)
+                    this.el.addEventListener('click',this._onMouseDown.bind(this), false);
+
+					// some temp variables
+					this.rotation = -1;
+					this.triggerResize = true;
+
+
+					// try to notice all resizes of the screen
+					window.addEventListener('resize', () => {
+						console.log("resize, trigger adjust canvas size")
+						this.triggerResize = true;
+					})
+
+					// new worker
+					this.worker = new Worker ("../../libs/worker-palm.js")
+
+					this.worker.onmessage = (ev) => {
+						switch (ev.data.type) {
+							case "cvFrame":
+								// finished with a frame!
+								var videoFrame = XRVideoFrame.createFromMessage(ev)
+
+								// get the face rectangles
+                                this.sdObjectRects = ev.data.sdObjectRects;
+
+								//this.msgScore.innerHTML = ev.data.sdObjectXML
+
+								// timing
+								cvEndTime = ev.data.time;
+								cvFaceTime = cvEndTime - cvAfterResizeTime;
+
+								// see if the video frame sizes have changed, since
+								// we'll need to adjust the 2D overlay
+								var rotation = videoFrame.camera.cameraOrientation;
+								var buffer = videoFrame.buffer(0)
+
+								var width = buffer.size.width
+								var height = buffer.size.height
+								if (this.triggerResize || this.rotation != rotation) {
+									this.triggerResize = false;
+									this.rotation = rotation;
+									this.adjustRenderCanvasSize(rotation, width, height)
+								}
+
+								// are we showing the image (for debugging) or just the rectangles?
+								if (showCVImage) {
+									this.showVideoFrame(videoFrame)
+								} else {
+									cvImageCtx.clearRect(0, 0, cvImageDiv.width, cvImageDiv.height);
+								}
+
+                                for (let j = 0; j < this.sdObjectRects.length; j++) {
+                                    let rect = this.sdObjectRects[j];
+                                    cvImageCtx.strokeRect(rect.x, rect.y, rect.width , rect.height);
+                                    var locationX = rect.x + rect.width/2.0;
+                                    var locationY = rect.y + rect.height / 2.0;
+
+                                    cvImageCtx.strokeRect(locationX, locationY, 5 , 5);
+
+                                    //detect basePlayer
+									if (isBoardCreated) {
+									    this.touchBegin(locationX,locationY)
+                                        /*var objPos = this.toScreenPosition(gemsGrid[0].gems)
+                                        for (var i = 0; i < boardwidthCell; i++) {
+                                            var objPos = this.toScreenPosition(gemsGrid[i].gems)
+                                            if ((objPos[0] - 5 <= locationX && locationX <= objPos[0] + 5) ){//&& (locationY >= objPos[1] - 30 && objPos[1] + 30 >= locationY)) {
+                                                basePlayer.position.set(gemsGrid[i].gems.position.x, gemsGrid[i].gems.position.y, gemsGrid[i].gems.position.z)
+                                                //msg = "x:" + locationX + ", y:" + locationY + "MinX:" + objPos[0] + "MinY:" + objPos[1] + ' match found' + "grid: " + gridX + '+' + gridY;
+                                                //break;
+                                            }
+
+                                        }*/
+                                    }
+
+                                }
+
+								// update CV fps, and release the image
+								updateCVFPS();
+								videoFrame.release();
+								break;
+
+							case "cvStart":
+								// request the next frame when the worker starts working on the current
+								// one, to pipeline a bit
+								this.requestVideoFrame();
+
+								// has there been a delay since the last frame was finished processing?
+								// this shouldn't happen, but is a sign that the background tasks are
+								// being throttled
+								cvStartTime = ev.data.time;
+								if (cvEndTime > 0) {
+									cvIdleTime = cvStartTime - cvEndTime;
+								}
+								break
+								
+							case "cvAfterMat":
+								cvAfterMatTime = ev.data.time;
+								cvMatTime = cvAfterMatTime - cvStartTime
+								break;
+
+							case "cvAfterResize":
+								cvAfterResizeTime = ev.data.time;
+								cvResizeTime = cvAfterResizeTime - cvAfterMatTime
+								break;
+
+							case "cvReady":
+								// opencv is loaded and ready!
+								console.log('OpenCV.js is ready');
+								openCVready = true				
+								break;
+
+							case "cvStatus":
+								// opencv sends status messages sometimes
+								cvStatusTxt = ev.data.msg;
+								break;
+						}
+					}
+
+					this.worker.addEventListener('error', (e) => { 
+						console.log("worker error:" + e) 
+					})
+				}
+
+                scalePreserveAspectRatio(imgW,imgH,maxW,maxH){
+                    return(Math.min((maxW/imgW),(maxH/imgH)));
+                }
+
+				// new session, tell it about our worker
+				newSession() {					
+					this.setVideoWorker(this.worker);
+				}
+
+				// when the window or video frame resizes, we need to resize and reposition
+				// the 2D overlay
+				adjustRenderCanvasSize (rotation, width, height) {
+					var cameraAspect;
+					console.log("adjustRenderCanvasSize: " + rotation + " degrees, " + width + " by " + height)
+					tempVideoCanvas.width = width;
+					tempVideoCanvas.height = height;
+
+					if(rotation == 90 ||  rotation == -90) {
+						cameraAspect = height / width;
+						cvImageDiv.width = height
+						cvImageDiv.height = width		
+					} else {
+						cameraAspect = width / height;
+						cvImageDiv.width = width
+						cvImageDiv.height = height		
+					}
+
+					// reposition to DIV
+					var windowWidth = this.session.baseLayer.framebufferWidth;
+					var windowHeight = this.session.baseLayer.framebufferHeight;
+					var windowAspect = windowWidth / windowHeight;
+
+					var translateX = 0;
+					var translateY = 0;
+					if (cameraAspect > windowAspect) {
+						windowWidth = windowHeight * cameraAspect;
+						translateX = -(windowWidth - this.session.baseLayer.framebufferWidth)/2;
+					} else {
+						windowHeight = windowWidth / cameraAspect; 
+						translateY = -(windowHeight - this.session.baseLayer.framebufferHeight)/2;
+					}
+
+					cvImageDiv.style.width = windowWidth.toFixed(2) + 'px'
+					cvImageDiv.style.height = windowHeight.toFixed(2) + 'px'		
+					cvImageDiv.style.transform = "translate(" + translateX.toFixed(2) + "px, "+ translateY.toFixed(2) + "px)"
+				}
+
+				// Called during construction
+				initializeScene(){
+
+					// Add a box at the scene origin
+					let box = new THREE.Mesh(
+						new THREE.BoxBufferGeometry(0.1, 0.1, 0.1),
+						new THREE.MeshPhongMaterial({ color: '#DDFFDD' })
+					)
+					box.position.set(0, 0, 0)
+					var axesHelper = AxesHelper( 0.2 );
+		            this.floorGroup.add( axesHelper );
+					//this.floorGroup.add(box)
+
+					this.scene.add(new THREE.AmbientLight('#FFF', 0.2))
+					let directionalLight = new THREE.DirectionalLight('#FFF', 0.6)
+					directionalLight.position.set(0, 10, 0)
+					this.scene.add(directionalLight)
+
+                    this.listenerSetup = false
+
+					console.log("Initialing scene ...")
+					this.createBoard();
+					//this.loadBricks();
+                    //setInterval(this.ballMove(),20);
+
+				}
+
+                createBoard(){
+                    plate.position.set(0, 0.6, -1);//0, 0.6, -1
+                    this.floorGroup.add(plate)
+
+                    basePlayer.position.set(0,0.0,0.5)//5
+                    plate.add(basePlayer);
+
+                    baseComputer.position.set(0,0.0,-0.5)//5
+                    plate.add(baseComputer);
+
+                    ball.position.set(ballX,0.0,ballY)//5
+                    plate.add(ball);
+
+                    for (var i=0; i<boardwidthCell; i++) {
+                        gemsGrid[i] = new EquipEnemyGrid();
+                        gemsGrid[i].gridPositionX = boardPositionX+i*(gemsLengthX+gap);
+                        gemsGrid[i].gridPositionY = hightDown+boardPositionY;
+                        gemsGrid[i].gridX=i;
+                        gemsGrid[i].gridY=0;
+                        gemsGrid[i].type=0;
+
+						gemsGrid[i].gems = new THREE.Mesh(
+							new THREE.BoxBufferGeometry(gemsLengthX, 0.0, gemsLengthY),
+							new THREE.MeshPhongMaterial({color: '#52c682'})
+						)
+						gemsGrid[i].gems.position.set(boardPositionX+i*(gemsLengthX+gap),0,hightDown+boardPositionY)
+						plate.add(gemsGrid[i].gems);
+                    }
+
+                    isBoardCreated=true;
+
+                    //return plate;
+                }
+
+                toScreenPosition(obj) //3d to 2d touch conversion
+                {
+                    var vector = new THREE.Vector3();
+
+                    var widthHalf = 0.5*this.renderer.context.canvas.width;
+                    var heightHalf = 0.5*this.renderer.context.canvas.height;
+
+                    obj.updateMatrixWorld();
+                    vector.setFromMatrixPosition(obj.matrixWorld);
+                    vector.project(this.camera);
+
+                    vector.x = ( vector.x * widthHalf ) + widthHalf;
+                    vector.y = - ( vector.y * heightHalf ) + heightHalf;
+
+
+                    var screenPos = [vector.x,vector.y];
+
+                    return screenPos;
+                };
+
+                doRender() {
+                    //requestAnimationFrame(super.doRender);
+                    TWEEN.update();
+                    this.renderer.clear()
+
+                    this.renderer.render(this.scene, this.camera);
+                }
+
+                touchBegin(locationX, locationY){
+                    var msg = "";//'Touch pos ' + locationX + ", " + locationY + "| ";
+                    //this.msgScore.innerHTML= msg;
+                    var objPos = this.toScreenPosition(gemsGrid[0].gems)
+                    outerloop: for (var i = 0; i < boardwidthCell-1; i++) {
+                        var objPos = this.toScreenPosition(gemsGrid[i].gems)
+						// if (i==0){
+                        //     msg = msg + "obj: "+ objPos[0] + ", " + objPos[1] + " |"
+						// }
+
+                       // if ((objPos[0] - 5 <= locationX && locationX <= objPos[0] + 5) ){//&& (locationY >= objPos[1] - 30 && objPos[1] + 30 >= locationY)) { //check position with every object
+						 if( locationX <= objPos[0]){
+                            //gemsGrid[i][j].gems.material.color.setHex(0xff0000);
+                            basePlayer.position.set(gemsGrid[i+1].gems.position.x,gemsGrid[i+1].gems.position.y,gemsGrid[i+1].gems.position.z)
+                            //msg = "x:" + locationX + ", y:" + locationY + "MinX:" + objPos[0] + "MinY:" + objPos[1] + ' match found' + "grid: " + gridX + '+' + gridY;
+                            msg = msg + "lx "+ locationX+" <= "+objPos[0]+" | "+i
+                            break outerloop;
+                        }
+
+                    }
+                    //this.infoMsg.innerHTML = msg
+				}
+
+
+				updateScene(frame){
+					this.lightEstimate = frame.lightEstimate || 0;
+					stats.update()
+
+					var txt = "<center>"
+					txt += "ARKit Light Estimate: " + this.lightEstimate.toFixed(2);
+					txt += "<br>" ;
+					if (cvStatusTxt.length > 0) {
+						txt += "OpenCV: " + cvStatusTxt + "<br>"
+					}
+					if (openCVready) {
+						txt += "Looking for Controller:<br>"
+						/*if (this.faceRects.length > 0) {
+							txt +=  "found " + this.faceRects.length.toString() + " faces and/or eyes"
+						}*/
+                        if (this.sdObjectRects.length > 0) {
+                            txt +=  "found " + this.sdObjectRects.length.toString() + " Target";
+
+                        }
+						else {
+
+							txt += "NO Controller"
+						}
+
+						txt += "<br><br>idle / init / resize / detect:<br> " 
+						txt += cvIdleTime.toFixed(2) 
+						txt += " " + (cvMatTime).toFixed(2)
+						txt += " " + (cvResizeTime).toFixed(2)
+						txt += " " + (cvFaceTime).toFixed(2) 
+					} else {
+						txt += "(Initializing OpenCV)"
+					}
+
+					txt += "</center>"
+					this.messageText = txt;
+
+					if (this.messageText != this.textBox.innerHTML) {
+						this.textBox.innerHTML = this.messageText;
+					}
+
+					// do another check on frame size, to make sure we don't miss one
+					var viewport = frame.views[0].getViewport(this.session.baseLayer);
+					if (viewport.width != viewWidth || viewport.height != viewHeight) {
+						viewHeight = viewport.height;
+						viewWidth = viewport.width;
+
+						console.log("noticed view size is different than saved view size, trigger adjust canvas size")
+						this.triggerResize = true;
+					}
+
+					//for 3d glass anchor position
+                    if (!this.listenerSetup) {
+                        this.listenerSetup = true
+                      //  this.session.addEventListener(XRSession.NEW_WORLD_ANCHOR, this._handleNewWorldAnchor.bind(this))
+                      //  this.session.addEventListener(XRSession.UPDATE_WORLD_ANCHOR, this._handleUpdateWorldAnchor.bind(this))
+                       // this.session.addEventListener(XRSession.REMOVE_WORLD_ANCHOR, this._handleRemoveWorldAnchor.bind(this))
+                    }
+                   //if (ballFrame%20==0)
+					if (isBoardCreated){
+					    if(isGamePause){
+					        if (!isGameGameOver)
+								this.infoMsg.innerHTML = 'Touch to start';
+
+						}
+						else{
+                           // this.infoMsg.innerHTML="";
+                            this.ballMove()
+						}
+					}
+					else {
+
+                        //this.msgScore.innerHTML = "Touch to create Board";
+					}
+                    if (isResetTap) {
+                        this.tapResetBtn()
+                    }
+
+				}
+
+                _handleUpdateWorldAnchor(event) {
+                    let anchor = event.detail
+                    if (anchor instanceof XRFaceAnchor) {
+                        if (anchor.geometry !== null) {
+                            let currentVertexIndex = 0
+                            var position = this.glasses.geometry.attributes.position;
+                            for (let vertex of anchor.geometry.vertices) {
+                                position.setXYZ(currentVertexIndex++, vertex.x, vertex.y, vertex.z)
+                            }
+
+                            //this.faceMesh.geometry.verticesNeedUpdate = true;
+                            position.needsUpdate = true;
+                        }
+                    }
+                }
+
+				// show the video frame for debugging
+				showVideoFrame(videoFrame) {
+					var camera = videoFrame.camera
+					var buffer = videoFrame.buffer(0)
+
+					// this buffer is created in the worker, and if the worker
+					// doesn't access the frame, it won't be created.  So don't
+					// display the buffer if there is nothing to display yet!
+					if (!(buffer._buffer instanceof ArrayBuffer)) {
+						return;
+					}
+
+					if (!cvImageBuff || cvImageBuff.length != buffer._buffer.length) {
+						cvImageBuff = new Uint8ClampedArray(buffer._buffer);
+					}
+					var data = cvImageBuff
+
+					switch (videoFrame.pixelFormat) {
+						case XRVideoFrame.IMAGEFORMAT_YUV420P:
+							var len  = buffer.buffer.length
+							var rowExtra = buffer.size.bytesPerRow - buffer.size.bytesPerPixel * buffer.size.width;
+
+							var newData = new Uint8ClampedArray(len*4)
+							var j=0;
+							var i=0;
+							for (var r = 0; r < buffer.size.height; r++ ) {
+								for (var c = 0; c < buffer.size.width; c++) {
+									newData[j++] = data[i];
+									newData[j++] = data[i];
+									newData[j++] = data[i];
+									newData[j++] = 255;
+									i++;
+								}
+								i += rowExtra;
+							}
+							data = newData;
+							break;
+					}
+
+					var imgData = new ImageData(data, buffer.size.width, buffer.size.height);
+					tempVideoCanvasCtx.putImageData(imgData,0,0);
+					
+					var width = buffer.size.width
+					var height = buffer.size.height
+
+					cvImageCtx.clearRect(0, 0, width, height);
+
+					if (camera.cameraOrientation == 90 || camera.cameraOrientation == -90) {
+						cvImageCtx.translate(height/2, width/2); 
+					} else {
+						cvImageCtx.translate(width/2, height/2); 
+					}
+
+					// rotate by negative, since the cameraOrientation is the orientation of the
+					// camera relative to view and we want to undo that
+					cvImageCtx.rotate(-camera.cameraOrientation * Math.PI/180); 
+
+					cvImageCtx.drawImage(tempVideoCanvas, -width/2, -height/2);
+					cvImageCtx.resetTransform()
+				}
+
+                _onTouchStart(ev){
+                    if (!ev.touches || ev.touches.length === 0) {
+                        console.error('No touches on touch event', ev)
+                        this.msgScore.innerHTML = "No Touch";
+                        return
+                    }
+
+                    const x = ev.touches[0].clientX / window.innerWidth
+                    const y = ev.touches[0].clientY / window.innerHeight
+
+                    this.msgScore.innerHTML = "";//"Touch X: "+x + ', Y: '+y;
+
+                    if (isBoardCreated){
+                        if(isGamePause){
+                            isGamePause = false
+                            this.infoMsg.innerHTML = ""
+                        }
+                    }
+                    if (isGameGameOver){
+                        isGameGameOver = false;
+                        score = 0;
+                        lives= 3;
+					}
+                    if (isBoardCreated){
+                        this.msgScore.innerHTML = "Touch X: "+x + ', Y: '+y;
+                        this.touchBegin(ev.touches[0].clientX,ev.touches[0].clientY);
+                    }
+
+                    if(!isBoardCreated){
+
+                        this.create3dObject(x,y);
+
+					}
+
+                    //var objPos1 = this.toScreenPosition(gemsGrid[0].gems)
+                    //var objPos2 = this.toScreenPosition(gemsGrid[1].gems)
+
+                  //  this.infoMsg.innerHTML = gemsGrid[0].gems.position.x + ": "+ gemsGrid[1].gems.position.x + " | " + objPos1[0] + ": "+ objPos2[0]
+
+                }
+
+                _onMouseDown(ev){
+                    console.log('clickon: '+ev.clientX + ', '+ev.clientY);
+
+                    this._tapEventData = [
+                        ev.clientX,
+                        ev.clientY
+                    ]
+
+                    if(!isBoardCreated){
+                        this.create3dObject(ev.clientX/window.innerWidth,ev.clientY/window.innerHeight);
+                        //isBoardCreated=true;
+                    }
+                    if (isBoardCreated){
+                        console.log("Touch X: "+ev.clientX + ', Y: '+ev.clientY);
+                        this.touchBegin(ev.clientX,ev.clientY);
+                    }
+
+                }
+                create3dObject(posX, posY){
+
+                    const x = posX; /// window.innerWidth
+                    const y = posY; /// window.innerHeight
+
+                    this.session.hitTest(x, y).then(anchorOffset => {
+                        if(anchorOffset === null){
+                            this.infoMsg.innerHTML = 'Anchor point not found! Try again'
+                        } else {
+
+                            /// Body Create
+                            document.getElementById("buttonDiv").style.display = "block";
+                            //this.msgScore.innerHTML = "start T";
+                            this.addAnchoredNode(anchorOffset, this.createBoard());
+                            isBoardCreated=true;
+                            if (openCVready){
+                                if (isGamePause)
+                                	this.infoMsg.innerHTML = 'Touch to start';
+                            }
+                            else {
+                                if (isGamePause)
+                                	this.infoMsg.innerHTML = 'Wait for OpenCV \n Or \n Touch to play by tapping on screen';
+							}
+							if (isResetTap)
+							    isResetTap =false
+                            //testing end
+                        }
+                    }).catch(err => {
+                        console.error('Error in hit test', err)
+                        //this.msgScore.innerHTML='Erro hit:'+err
+                    })
+                }
+
+                //brick Game
+
+                loadBricks(){
+                    for(var c=0;c<brickColumnCount;++c){
+                        for(var r=0;r<brickRowCount;++r){
+                            if(bricks[c][r].status==1){
+
+                                // var brickX=(c*(brickWidth+brickPadding))+brickOffsetLeft;
+                                // var brickY=(r*(brickHeight+brickPadding))+brickOffsetTop;
+
+                                brickGrid[c][r] = new EquipEnemyGrid()
+                                brickGrid[c][r].gridPositionX = brickPositionX+c*(brickLength[0]+brickGap);
+                                brickGrid[c][r].gridPositionY = hightDown+r*(brickLength[2]+brickGap);
+                                brickGrid[c][r].gridX=c;
+                                brickGrid[c][r].gridY=r;
+                                brickGrid[c][r].type=bricks[c][r].status;
+
+                                brickGrid[c][r].gems = new THREE.Mesh(
+									new THREE.BoxBufferGeometry(brickLength[0], brickLength[1], brickLength[2]),
+									new THREE.MeshPhongMaterial({color: this.getRandomColor()})
+								)
+                                brickGrid[c][r].gems.position.set(brickPositionX+c*(brickLength[0]+brickGap),0,brickPositionY+r*(brickLength[2]+brickGap))
+								plate.add(brickGrid[c][r].gems);
+
+                                bricks[c][r].x=brickGrid[c][r].gridPositionX;
+                                bricks[c][r].y=brickGrid[c][r].gridPositionY;
+
+                            }
+                        }
+                    }
+                }
+
+                ballMove(){
+                    ballFrame++;
+
+					//computer side
+                    if(ballY+dy<-0.5+ballRadius) {
+                        //dy = -dy;
+                        if(ballX>=baseComputer.position.x-(0.1+ballRadius) && ballX<=baseComputer.position.x+(0.1+ballRadius)){
+                            dy=-dy;
+                        }
+                        else{
+                            /*scorePlayer++;
+                            if(scorePlayer==30) {
+                                this.gameOver(1)
+                                //this.msgScore.innerHTML = "Game Over: Player WIN! ";
+
+                            }
+                            else{*/
+                               this.resetBall()
+                                //paddleWidth=80;
+                                //rem=count;
+                                //paddleX=(canvas.width-paddleWidth)/2;
+                            //}
+                        }
+                    }
+
+                    //player Side
+                    else if(ballY+dy>0.5-ballRadius){
+                        //dy=-dy;
+                        if(ballX>=basePlayer.position.x-(0.1+ballRadius) && ballX<=basePlayer.position.x+(0.1+ballRadius)){
+                             dy=-dy;
+                            score++;
+                            if (score == gameWinScore)
+                            	this.gameOver(1)
+                        }
+                         else{
+							//scoreComputer++;
+							lives--;
+							//if(scoreComputer==30) {
+							if (lives == 0) {
+								this.gameOver(0)
+							}
+							else {
+								this.resetBall()
+
+							}
+                         }
+                    }
+                    else
+                        ballY+=dy;
+
+                    if(ballX+dx<-0.35 || ballX+dx>0.35-ballRadius)
+                        dx=-dx;
+                    else
+                        ballX+=dx;
+
+                    if (scorePlayer == 10 || scoreComputer == 10 || score == 10){
+                        dx = 0.02;
+                        dy = -0.02;
+					}
+                    if (scorePlayer == 20 || scoreComputer == 20 || score == 20){
+                        dx = 0.03;
+                        dy = -0.03;
+                    }
+
+
+                    baseComputer.position.x = ballX;
+                    ball.position.set(ballX,0.0,ballY)
+                    this.msgScore.innerHTML = "Score: "+ score + " | Lives: " + lives;
+				}
+
+
+
+                getRandomColor() {
+                    var letters = '0123456789ABCDEF';
+                    var color = '#';
+                    for (var i = 0; i < 6; i++) {
+                        color += letters[Math.floor(Math.random() * 16)];
+                    }
+                    return color;
+                }
+
+                gameOver(isWin){
+                    if (isWin==1){
+                        this.infoMsg.innerHTML = "Game Over: You WIN <br /> Score: " +score + "<br /> Touch to play again";
+                        isGamePause = true
+                        isGameGameOver =true
+					}
+					else{
+                        this.infoMsg.innerHTML = "Game Over: No Lives! <br /> You Loose <br />Score: " +score+ "<br /> Touch to play again";
+                        isGamePause = true
+                        isGameGameOver =true
+					}
+
+				}
+				resetBall(){
+                    ballX = 0.0;
+                    ballY = 0.0;
+                    ball.position.set(ballX,0.0,ballY)
+                    dy=-dy;
+                    isGamePause = true;
+                    this.infoMsg.innerHTML = "You Miss it! <br />Touch to start";
+				}
+				gameRestart (){
+
+				}
+
+				tapResetBtn(){
+                    //this.infoMsg.innerHTML = "ResetTapped";
+
+                   this.infoMsg.innerHTML = "Reset Tap! Touch to create Board ...";
+
+                    /*if (baseComputer)
+                        this.plate.remove(baseComputer)
+                    if (basePlayer)
+                        this.plate.remove(basePlayer)
+                    if (ball)
+                        this.plate.remove(ball)*/
+                    if (plate){
+                        for (var i = plate.children.length - 1; i >= (gridSizeWidth*gridSizeHeight); i--) {
+                            plate.remove(plate.children[i]);
+                        }
+                        this.floorGroup.remove(plate)
+                    }
+
+                    isGamePause = true
+                    score = 0;
+                    lives = 10;
+                    isBoardCreated = false;
+				}
+
+
+
+				//brick Game END
+			}
+            resetBtn.onclick = function() {
+
+                isResetTap = true
+
+            }
+
+			function opencvIsReady() {
+				console.log('OpenCV.js is ready');
+				openCVready = true				
+			}
+
+			function AxesHelper( size ) {
+				size = size || 1;
+
+				var vertices = [
+					0, 0, 0,	size, 0, 0,
+					0, 0, 0,	0, size, 0,
+					0, 0, 0,	0, 0, size
+				];
+
+				var colors = [
+					1, 0, 0,	1, 0.6, 0,
+					0, 1, 0,	0.6, 1, 0,
+					0, 0, 1,	0, 0.6, 1
+				];
+
+				var geometry = new THREE.BufferGeometry();
+				geometry.addAttribute( 'position', new THREE.Float32BufferAttribute( vertices, 3 ) );
+				geometry.addAttribute( 'color', new THREE.Float32BufferAttribute( colors, 3 ) );
+
+				var material = new THREE.LineBasicMaterial( { vertexColors: THREE.VertexColors } );
+
+				return new THREE.LineSegments(geometry, material);
+			}
+
+			window.addEventListener('DOMContentLoaded', () => {
+				setTimeout(() => {
+					try {
+						window.pageApp = new WebXRObjectDetection(document.getElementById('target'))
+					} catch(e) {
+						console.error('page error', e)
+					}
+				}, 1000)
+			})
+
+			//Xiaomi Mi A2 Lite - 19K
+			//Xiaomi Mi 8 Lite
+			//Xiaomi Redmi Note 7 - 20K vs Xiaomi Redmi 7 (no Gyro) - 14k
+			//huawei Y9 pro - 21k
+			//huawei y7 pro - no gyro - 14k
+
+
+		</script>
+	</body>
+</html>

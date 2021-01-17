@@ -1,0 +1,164 @@
+<html lang="en">
+	<head>
+		<title>Ecommerce Site</title>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1">
+		<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.1.3/css/bootstrap.min.css">
+		<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.3/umd/popper.min.js"></script>
+		<script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.1.3/js/bootstrap.min.js"></script>
+		<script src="https://cdn.jsdelivr.net/npm/vue@2.5.17/dist/vue.js"></script>
+		<!--<link rel="stylesheet" href="../common/modalDesign.css"/>
+		<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css" integrity="sha384-Gn5384xqQ1aoWXA+058RXPxPg6fy4IWvTNh0E263XmFcJlSAwiGgFAW/dAiS6JXm" crossorigin="anonymous">-->
+
+	</head>
+	<body>
+
+	<div class="container">
+		<h2 align="center">Sunglass Sample Store</h2>
+		<div id="products">
+			<!--{{deviceType}}-->
+			<div class="row">
+				<div v-for="product in allproducts" class="col-md-4 col-sm-12">
+					<div class="card" style="width: 100%" align = "center">
+						<div class="card-body">
+							<div class="card-header bg-info" style="color:white">Product Name: {{product.name}}</div>
+							<br/>
+							<div class="row">
+
+								<div class="col-5">
+									<div class="row">&nbsp;&nbsp;Price:{{product.price}}</div>
+									<br />
+									<div class="row">
+
+									</div>
+									<!-- condition for mobile or pc -->
+									<div class = "row" v-if="deviceType == 'Mobile'">
+										<!--<input class="btn btn-primary" type="button" value="Try it!" v-on:click="selectProduct(product.id+'.png');" data-toggle="modal" data-target="#myModal"/>-->
+										<a v-bind:href="'xrTrial.html?myselection='+product.id">Try it!</a>
+									</div>
+									<div class = "row" v-else>
+										&nbsp;&nbsp;&nbsp;
+										<input class="btn btn-primary" type="button" value="Try it!" v-on:click="selectProduct(product.id);" data-toggle="modal" data-target="#myModal"/>
+										<!--<a v-bind:href="'/index.html?myselection='+product.id">Try it!</a>-->
+									</div>
+								</div>
+
+								<div class="col-7">
+									<br />
+									<div class="row" align="right">
+										<img v-bind:src="'images/' + product.id+'.png'" v-bind:alt="product.id+'.png'" style="width:150px;height:55px;"/>
+									</div>
+									<br />
+								</div>
+							</div>
+						</div>
+						<br />
+					</div>
+					<br />
+				</div>
+			</div>
+		<!-- Button to Open the Modal
+			<button type="button" class="btn btn-primary" href="/index.html" data-toggle="modal" data-target="#myModal">
+				Open modal
+			</button>-->
+		</div>
+	</div>
+		<!-- The Modal -->
+		<div class="modal" id="myModal">
+			<div class="modal-dialog modal-lg">
+				<div class="modal-content">
+					<div class="modal-header">
+						<button type="button" class="close" data-dismiss="modal">&times;</button>
+					</div>
+					<div class="modal-body">
+					</div>
+					<div class="modal-footer">
+						<button type="button" class="btn btn-danger" data-dismiss="modal">Close</button>
+					</div>
+				</div>
+			</div>
+		</div>
+
+
+	<script>
+		//check device
+		var myDeviceType="Not sure"
+        function isMobileDevice() {
+            return (typeof window.orientation !== "undefined") || (navigator.userAgent.indexOf('IEMobile') !== -1);
+        };
+
+        //if($.browser.device = (/android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/i.test(navigator.userAgent.toLowerCase())))
+        if(isMobileDevice())
+            myDeviceType = "Mobile"
+        else
+            myDeviceType = "Computer"
+
+        //read json file
+
+        function loadJSON(callback) {
+
+            var xobj = new XMLHttpRequest();
+            xobj.overrideMimeType("application/json");
+            xobj.open('GET', 'products.json', true); // Replace 'my_data' with the path to your file
+            xobj.onreadystatechange = function () {
+                if (xobj.readyState == 4 && xobj.status == "200") {
+                    // Required use of an anonymous callback as .open will NOT return a value but simply returns undefined in asynchronous mode
+                    callback(xobj.responseText);
+                }
+            };
+            xobj.send(null);
+        }
+
+        loadJSON(function(response) {
+            // Parse JSON string into object
+            var myJsonData = JSON.parse(response);
+           // console.log("i m called:"+myJsonData.length)
+            //for (var i=0; i< myJsonData.length;i++)
+              //  console.log("Product Name "+myJsonData[i].name + " Price: "+myJsonData[i].price)
+
+            //vue js
+            new Vue({
+
+                el: '#products',
+                data: {
+                    allproducts : myJsonData,
+					deviceType:myDeviceType,
+                },
+
+                methods: {
+                    submitValue: function(event){
+                    },
+                    selectProduct: function(glassName){
+                        var url = "xrTrial.html?myselection="+glassName;
+                        $(".modal-body").html('<iframe width="100%" height="100%" frameborder="0" scrolling="no" allowtransparency="true" src="'+url+'"></iframe>');
+
+                    }
+
+                },
+            });
+
+            //vue js end
+
+        });
+
+        //modal
+
+
+        //$('a.btn').on('click', function(e) {
+ /*       $('button.btn.btn-primary').on('click', function(e) {
+            e.preventDefault();
+            var url = $(this).attr('href');
+            $(".modal-body").html('<iframe width="100%" height="100%" frameborder="0" scrolling="no" allowtransparency="true" src="'+url+'"></iframe>');
+        });*/
+
+        // set mdoal view size
+       /* $(".modal-wide").on("show.bs.modal", function() {
+            var height = $(window).height() - 200;
+            $(this).find(".modal-body").css("height", height);
+        });*/
+
+	</script>
+
+	</body>
+</html>

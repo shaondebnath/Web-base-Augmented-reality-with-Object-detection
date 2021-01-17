@@ -1,0 +1,355 @@
+<html>
+<head>
+
+	<link rel="stylesheet" type="text/css" href="../../common/bootstrap.min.css" />
+
+	<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+
+
+	<style type="text/css">
+		body {
+			background: #517e8b !important;
+			font-family: 'Lato', sans-serif;
+			text-align: center;
+		}
+		h2 {
+			color: white;
+			font-size: 2em;
+			font-weight: 400;
+			letter-spacing: 0.1em;
+		}
+		button {
+			display: block;
+			border-radius: 100%;
+			border: none;
+			outline: none;
+			margin: 15px;
+			padding: 20px;
+			background-color: #03a9f4;
+			box-shadow: 3px 3px 7px #333333;
+
+			&:active {
+			 box-shadow: none;
+			 background-color: #4e555b;
+		 	}
+		}
+		.button-bg img {
+			display: block;
+			height: 40px;
+			width: 40px;
+
+		}
+		button:active{
+			box-shadow: none;
+			background-color: #036f9f;
+		}
+
+
+
+	</style>
+
+</head>
+
+<body>
+<h2 align="center">Samsung<br />TV Remote</h2>
+<div id="errormsg" style="text-align:center; color:#ffae6e; font-size: 20px"></div>
+
+<div class="container" align ="center">
+	<div class="card" style="background: #375764; border-radius: 3%;
+			border: 1px;" align = "center" width="100%">
+		<div class="card-body">
+			<div class="row">
+				<!-- Power-->
+				<div class="col-6">
+					<button id="power" class="button-bg" style="background-color: red">
+						<img src="images/power.png"></button>
+					</button>
+				</div>
+				<!-- Source-->
+				<div class="col-6" >
+					<button id="source" class="button-bg" style="background-color:#ff8f01">
+						<img src="images/source.png"></button>
+					</button>
+				</div>
+			</div>
+			<div class="row">
+				<!-- TV-->
+				<div class="col-6" >
+					<button id="tv" class="button-bg">
+						<img src="images/tv.png"></button>
+					</button>
+				</div>
+				<!-- HDMI-->
+				<div class="col-6" >
+					<button id="hdmi" class="button-bg">
+						<img src="images/hdmi.png"></button>
+					</button>
+				</div>
+			</div>
+		</div>
+	</div>
+	<br/>
+	<div class="card" style="background: #456a78; border-radius: 3%;
+			border: 1px;" align = "center">
+		<div class="card-body">
+			<div class="row">
+		<!-- Volume-->
+				<div class="col-6" >
+					<button id="vol-up" class="button-bg">
+						<img src="images/volumeUp.png"></button>
+					</button>
+					<button id="vol-down" class="button-bg">
+						<img src="images/volumeDown.png"></button>
+					</button>
+					<button id="mute" class="button-bg">
+						<img src="images/mute.png"></button>
+					</button>
+				</div>
+				<!-- Channel-->
+				<div class="col-6" >
+					<button id="channel-up" class="button-bg">
+						<img src="images/channelUp.png"></button>
+					</button>
+					<button id="channel-down" class="button-bg">
+						<img src="images/channelDown.png"></button>
+					</button>
+					<button id="previous" class="button-bg">
+						<img src="images/previous.png"></button>
+					</button>
+				</div>
+			</div>
+		</div>
+	</div>
+	<br/>
+	<!-- Arrow Start-->
+	<div class="card" style="background: #2f4d59; border-radius: 3%;
+			border: 1px;" align = "center">
+		<div class="card-body">
+			<div class="row">
+				<div class="col-12" >
+					<button id="up" class="button-bg">
+						<img src="images/arrowUp.png"></button>
+					</button>
+				</div>
+			</div>
+			<div class="row">
+				<div class="col-6 col-sm-4">
+					<button id="left" class="button-bg">
+						<img src="images/arrowLeft.png"></button>
+					</button>
+				</div>
+				<div class="col-6 col-sm-4">
+					<button id="ok" class="button-bg">
+						<img src="images/ok.png"></button>
+					</button>
+				</div>
+				<div class="col-6 col-sm-4">
+					<button id="right" class="button-bg">
+						<img src="images/arrowRight.png"></button>
+					</button>
+				</div>
+			</div>
+			<div class="row">
+				<div class="col-12">
+					<button id="down" class="button-bg">
+						<img src="images/arrowDown.png"></button>
+					</button>
+				</div>
+			</div>
+		</div>
+	</div>
+	<!-- Arrow END-->
+
+</div>
+
+
+
+</body>
+
+<script>
+
+//const SamsungTvRemote = new SamsungTvRemote ("samsung-tv-remote.js") //require('samsung-tv-remote');
+
+const powerButton = document.getElementById('power');
+const sourceButton = document.getElementById('source');
+const tvButton = document.getElementById('tv');
+const hdmiButton = document.getElementById('hdmi');
+
+const volUpButton = document.getElementById('vol-up');
+const volDownButton = document.getElementById('vol-down');
+const muteButton = document.getElementById('mute');
+const channelUpButton = document.getElementById('channel-up');
+const channelDownButton = document.getElementById('channel-down');
+const previousButton = document.getElementById('previous');
+
+
+const upArrowButton = document.getElementById('up');
+const leftArrowButton = document.getElementById('left');
+const okButton = document.getElementById('ok');
+const rightArrowButton = document.getElementById('right');
+const downArrowButton = document.getElementById('down');
+
+
+
+const sendCommand = command => {
+	fetch('endpoint', {method: 'post', body: command});
+}
+
+const power = () => {
+	console.log('power');
+	//sendCommand('power');
+    press('power')
+
+};
+
+const source = () => {
+	console.log('source');
+	//sendCommand('source');
+    press('source')
+};
+
+const tv = () => {
+    console.log('tv');
+    //sendCommand('source');
+    press('tv')
+};
+
+const hdmi = () => {
+    console.log('hdmi');
+    //sendCommand('source');
+    press('hdmi')
+};
+
+const volUp = () => {
+	console.log('volUp');
+	//sendCommand('volUp');
+    press('volumeUp','')
+};
+
+const volDown = () => {
+	console.log('volDown');
+	//sendCommand('volDown');
+	press('volumeDown')
+};
+
+const mute = () => {
+    console.log('mute');
+    //sendCommand('source');
+    press('mute')
+};
+
+const channelUp = () => {
+    console.log('channelUp');
+    //sendCommand('volUp');
+    press('channelUp','')
+};
+
+const channelDown = () => {
+    console.log('channelDown');
+    //sendCommand('volDown');
+    press('channelDown')
+};
+
+const previousChannel = () => {
+    console.log('previousChannel');
+    //sendCommand('source');
+    press('previousChannel')
+};
+
+
+const arrowUp = () => {
+    console.log('arrowUp');
+    //sendCommand('source');
+    press('arrow','up')
+};
+const arrowLeft = () => {
+    console.log('arrowLeft');
+    //sendCommand('source');
+    press('arrow','left')
+};
+const ok = () => {
+    console.log('ok');
+    //sendCommand('source');
+    press('enter')
+};
+const arrowRight = () => {
+    console.log('arrowRight','right');
+    //sendCommand('source');
+    press('arrow')
+};
+const arrowDown = () => {
+    console.log('arrowDown');
+    //sendCommand('source');
+    press('arrow','down')
+};
+
+
+
+
+if(powerButton)	
+	powerButton.addEventListener('click', power);
+if(sourceButton)
+	sourceButton.addEventListener('click', source);
+if(tvButton)
+    tvButton.addEventListener('click', tv);
+if(hdmiButton)
+    hdmiButton.addEventListener('click', hdmi);
+if(volUpButton)
+	volUpButton.addEventListener('click', volUp);
+if(volDownButton)
+	volDownButton.addEventListener('click', volDown);
+if(muteButton)
+    muteButton.addEventListener('click', mute);
+
+if(channelUpButton)
+    channelUpButton.addEventListener('click', channelUp);
+if(channelDownButton)
+    channelDownButton.addEventListener('click', channelDown);
+if(previousButton)
+    previousButton.addEventListener('click', previousChannel);
+
+if(upArrowButton)
+    upArrowButton.addEventListener('click', arrowUp);
+if(leftArrowButton)
+    leftArrowButton.addEventListener('click', arrowLeft);
+if(okButton)
+    okButton.addEventListener('click', ok);
+if(rightArrowButton)
+    rightArrowButton.addEventListener('click', arrowRight);
+if(downArrowButton)
+    downArrowButton.addEventListener('click', arrowDown);
+
+
+
+function press(method, param){
+    console.log('press ' + method + ' ' + (param ? param : ''));
+    var url = 'http://127.0.0.1:3000/' + method;
+    if (typeof param !== 'undefined') {
+        url += '/' + param;
+    }
+    /*$.get(url, function (data, status) {
+		console.log('${data}')
+    });*/
+    //this.$http.get(url).then(console.log);
+	$.ajax({
+		url:url,
+		type:"get",
+		success: function(result){
+		    console.log(result)
+            $(document).ready(function () {
+                $('#errormsg').html("success: "+result);
+            });
+		},
+		error:function (error) {
+			console.log('Error ${error}')
+			console.log(error)
+			var errorMsg = 'Could not connect with TV! Check TV IP address in config file'
+            $(document).ready(function () {
+                $('#errormsg').html(errorMsg);
+            });
+        }
+	})
+}
+</script>
+
+</html>
