@@ -10,7 +10,6 @@ The game is developed on unstable version of webxr-polyfill. for more informatio
 
 
 ## Building and Running the examples
-Clone the master branch of this repo from https://gitlab.tubit.tu-berlin.de/shaondebnath/webxrgame
 
 	npm install   # downloads webpack and an http server
 	npm start     # builds the polyfill in dist/webxr-polyfill.js and start the http server in the current directory
@@ -122,6 +121,8 @@ Video Demo: https://www.youtube.com/watch?v=5aqUpPg2XOE
 ## Board Game
 
 Look around to find the board and start playing by tapping on the Blue Gems.
+
+The source code of this game is removed for confidentiality
 
 Browse http://YOUR_HOST_NAME:8080/	and select "Board Game"
 
